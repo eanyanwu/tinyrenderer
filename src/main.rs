@@ -1,31 +1,39 @@
 use tinyrenderer::tga;
+use tinyrenderer::model;
 
 fn main() {
+    let model = model::WaveFront::new("african_head.obj").unwrap();
+
     let red = tga::TGAColor::new(255, 0, 0, 255);
 
     let white = tga::TGAColor::new(255, 255, 255, 255);
     
     let green = tga::TGAColor::new(0, 255, 0, 255);
 
-    let mut image = tga::TGAImage::new(100, 100, 4);
-
-    line_second_try(0, 49, 99, 49, &mut image, &white);
-
-    line_second_try(0, 99, 99, 0, &mut image, &white);
-
-    line_second_try(49, 99, 49, 0, &mut image, &white);
-
-    line_second_try(99, 99, 0, 0, &mut image, &white);
+    let mut image = tga::TGAImage::new(801, 801, 4);
     
-    line_second_try(0, 24, 99, 74, &mut image, &red);
-    
-    line_second_try(99, 24, 0, 74, &mut image, &red);
+    let width = 800.0;
 
-    line_second_try(74, 99, 24, 0, &mut image, &green);
+    let height = 800.0;
 
-    line_second_try(24, 99, 75, 0, &mut image, &green);
+    for i in 0..model.face_count() {
+        let face = model.get_face(i);
+        for j in 0..3 {
+            let v0 = model.get_vertex(face.vertices[j]);
+            let v1 = model.get_vertex(face.vertices[(j + 1) % 3]);
+            
+            let x0 = (v0.x + 1.0) * width/2.0;
+            let y0 = (v0.y + 1.0) * height/2.0;
+            let x1 = (v1.x + 1.0) * width/2.0;
+            let y1 = (v1.y + 1.0) * height/2.0;
 
-    image.write_tga_file("line.tga");
+            println!("({}, {}) to ({}, {})", x0, y0, x1, y1);
+
+            line_second_try(x0 as isize, y0 as isize, x1 as isize, y1 as isize, &mut image, &white);
+        }
+    }
+
+    image.write_tga_file("model.tga");
 }
 
 fn line_second_try(x0: isize, y0: isize, x1: isize, y1: isize, img: &mut tga::TGAImage, color: &tga::TGAColor) {
