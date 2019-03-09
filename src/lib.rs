@@ -62,12 +62,19 @@ pub mod tga {
             }
         }
 
-        pub fn set (&mut self, x: usize, y: usize, color: &TGAColor) {
-            let width = self.image_width as usize;
+        pub fn set (&mut self, x: isize, y: isize, color: &TGAColor) {
+            if x < 0 || x > self.image_width as isize {
+                panic!("Could not set pixel for invalid value or x: {}", x);
+            }
+            if x < 0 || y > self.image_height as isize{
+                panic!("Could not set pixel for invalid value of y: {}", y);
+            }
+
+            let width = self.image_width as isize;
 
             let index = y * width + x;
 
-            self.image_data[index] = color.get_pixel_value();
+            self.image_data[index as usize] = color.get_pixel_value();
         }
 
         pub fn flip_vertically (&mut self) {
