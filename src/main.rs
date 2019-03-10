@@ -4,17 +4,14 @@ use tinyrenderer::model;
 fn main() {
     let model = model::WaveFront::new("african_head.obj").unwrap();
 
-    let red = tga::TGAColor::new(255, 0, 0, 255);
-
     let white = tga::TGAColor::new(255, 255, 255, 255);
     
-    let green = tga::TGAColor::new(0, 255, 0, 255);
+    let width = 800;
+    let height = 800;
 
-    let mut image = tga::TGAImage::new(801, 801, 4);
+    let mut image = tga::TGAImage::new(width, height, 4);
     
-    let width = 800.0;
 
-    let height = 800.0;
 
     for i in 0..model.face_count() {
         let face = model.get_face(i);
@@ -22,21 +19,19 @@ fn main() {
             let v0 = model.get_vertex(face.vertices[j]);
             let v1 = model.get_vertex(face.vertices[(j + 1) % 3]);
             
-            let x0 = (v0.x + 1.0) * width/2.0;
-            let y0 = (v0.y + 1.0) * height/2.0;
-            let x1 = (v1.x + 1.0) * width/2.0;
-            let y1 = (v1.y + 1.0) * height/2.0;
+            let x0 = (v0.x + 1.0) * width as f64/2.0;
+            let y0 = (v0.y + 1.0) * height as f64/2.0;
+            let x1 = (v1.x + 1.0) * width as f64/2.0;
+            let y1 = (v1.y + 1.0) * height as f64/2.0;
 
-            println!("({}, {}) to ({}, {})", x0, y0, x1, y1);
-
-            line_second_try(x0 as isize, y0 as isize, x1 as isize, y1 as isize, &mut image, &white);
+            line_second_try(x0 as u16, y0 as u16, x1 as u16, y1 as u16, &mut image, &white);
         }
     }
 
     image.write_tga_file("model.tga");
 }
 
-fn line_second_try(x0: isize, y0: isize, x1: isize, y1: isize, img: &mut tga::TGAImage, color: &tga::TGAColor) {
+fn line_second_try(x0: u16, y0: u16, x1: u16, y1: u16, img: &mut tga::TGAImage, color: &tga::TGAColor) {
     // Start by getting the first pixel to plot
     let mut x = x0;
     let mut y = y0; 
@@ -49,9 +44,6 @@ fn line_second_try(x0: isize, y0: isize, x1: isize, y1: isize, img: &mut tga::TG
 
     let mut error = 0.0;
     
-    let x_step = if x0 < x1 { 1 } else { -1 };
-    let y_step = if y0 < y1 { 1 } else { -1 };
-
     // x-axis is "driving" so to speak -- meaning its values on the line between the two points 
     // is increasing faster than the y values (or at an equal rate)
     // If the x values are increasing at a greater rate than the y-values, then:
@@ -66,37 +58,47 @@ fn line_second_try(x0: isize, y0: isize, x1: isize, y1: isize, img: &mut tga::TG
     // This will also work if the y values are increasing at a greater rate than the x-values.
     // Except we will be adding 1/slope at each iteration.
     if dx.abs() >= dy.abs() {
-        while if x0 < x1 { x <= x1 } else { x >= x1 } {
+        while if x0 < x1 { x < x1 } else { x > x1 } {
             // Set the pixel.
-            img.set(x, y, color);
+            img.set(x as u16, y as u16, color);
             // Set x to the next pixel.
-            x += x_step;
+            if x0 < x1 { x += 1; } else { x -= 1; }
             // Increment the error by the slope
             error += m.abs();
 
             if error >= 1.0 {
-                // Error is greater than 1, increment y
-                y += y_step;
+                // Error is greater than 1, increment/decrement y based on the direction of the
+                // line.
+                if y0 < y1 { y+= 1; } else { y -= 1; }
                 // Decrement error
                 error -= 1.0;
             }
         }
+        
+        // See explanation below.
+        img.set(x1, y1, color);
     }
     else {
-        while if y0 < y1 { y <= y1 } else { y >= y1 } {
-            img.set(x, y, color);
+        while if y0 < y1 { (y as u16) < y1 } else { y as u16 > y1 } {
+            img.set(x as u16, y as u16, color);
+            
+            if y0 < y1 { y += 1; } else { y -= 1; }
 
-            y += y_step;
             // Increment the error by the inverse of the slope
             error += inverse_m.abs();
 
             if error >= 1.0 {
                 // Error is greater than 1, increment x
-                x += x_step;
+                if x0 < x1 { x += 1; } else { x -= 1; } 
                 // Decrement error
                 error -= 1.0;
             }
         }
+        // Since the loop stops right before the endpoints, we draw the endpoints manually.
+        // Reason: Consider the situation where y0 is 0. If we looped until y <= y0. y would be 0,
+        // yet we would stilll try to loop and eventually hit an error when we try to decrement
+        // from an unsinged integer.
+        img.set(x1, y1, color);
     }
 }
 

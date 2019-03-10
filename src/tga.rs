@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::prelude::*;
+
 pub struct TGAImage {
     // HEADER
     id_length: u8, // Field 1: Optional. Identifies the number of bytes contained in field 6. Value of 0 means no field 6
@@ -13,8 +14,10 @@ pub struct TGAImage {
     image_bits_per_pixel: u8, // Field 5: Also referred to as pixel depth
     image_descriptor: u8, // Field 5: Presence of an alpha channel + Screen destination of first pixel
     image_id: u8, // Field 6: Optional as per field 1.
+    
     // DATA 
     image_data: Vec<u32>, // Field 8: Image data!
+
     // FOOTER: According to the specification, the presence of these last 26 bits helps determine
     // that this is a TGA file of Version 2.
     developer_dictionary_offset: [u8; 4], 
@@ -31,12 +34,18 @@ impl TGAImage {
         let color_map_spec = [0, 0, 0, 0, 0]; 
         let x_origin = 0;
         let y_origin = 0;
-        let image_width = width;
-        let image_height = height;
+        // When specifying a width of 100, we actually mean that x-values 0 through 100 should be
+        // valid, so we actually want 101 values. Same for the height.
+        let image_width = width + 1;
+        let image_height = height + 1;
         let image_bits_per_pixel = bytes_per_pixel * 8;
         let image_descriptor = 0b0000_1000; // Bits 0-3: Alpha channel, Bits 5-6: order of moving pixels to screen
         let image_id = 0; // Just fullfulling all righteousness. This field will not be even written to file.
-        let image_data = vec![0x000000FF; width as usize * height as usize];
+        // The number of bits in `usize` is the number of bits that it takes to reference any
+        // location in memory. Since vectors are locations in memory, it's size could technically
+        // be the whole of memory, so I guess it makes sense that you would need a `usize` to
+        // define its size.
+        let image_data = vec![0x000000FF; image_width as usize * image_height as usize];
         let extension_area_offset = [0, 0, 0, 0];
         let developer_dictionary_offset = [0, 0, 0, 0];
         let signature: [u8; 18] = [b'T', b'R', b'U', b'E', b'V', b'I', b'S', b'I', b'O', b'N', b'-', b'X', b'F', b'I', b'L', b'E', b'.', b'\0'];
@@ -61,19 +70,23 @@ impl TGAImage {
         }
     }
 
-    pub fn set (&mut self, x: isize, y: isize, color: &TGAColor) {
-        if x < 0 || x > self.image_width as isize {
-            panic!("Could not set pixel for invalid value or x: {}", x);
+    // x and y are u16 because they can't be bigger than the width and height
+    pub fn set (&mut self, x: u16, y: u16, color: &TGAColor) {
+        if  x > self.image_width {
+            panic!("Could not set pixel for invalid value or x: {}. Width is {}", x, self.image_width);
         }
-        if x < 0 || y > self.image_height as isize{
-            panic!("Could not set pixel for invalid value of y: {}", y);
+        if  y > self.image_height { 
+            panic!("Could not set pixel for invalid value of y: {}. Height is {}", y, self.image_height);
         }
-
-        let width = self.image_width as isize;
-
-        let index = y * width + x;
-
-        self.image_data[index as usize] = color.get_pixel_value();
+    
+        // 2d coordinates to 1D  index.
+        // Again this convertion is needed because we can only index with usize. 
+        // Consider the case where the multiplication of these three values yields a valid index
+        // number, but one too large to fit in u16.
+        let index = y as usize * self.image_width as usize + x as usize;
+    
+        // However it is safe because u16 < usize (for modern computers as far as i know)
+        self.image_data[index] = color.get_pixel_value();
     }
 
     pub fn flip_vertically (&mut self) {
@@ -108,7 +121,7 @@ impl TGAImage {
         data.push(self.image_type);
         data.extend_from_slice(&self.color_map_spec);
         data.extend_from_slice(&[ // See [0]
-            (self.x_origin & 0x00ff) as u8, // See [1]
+            (self.x_origin & 0x00FF) as u8, // See [1]
             ((self.x_origin & 0xFF00) >> 8) as u8, // See [2]
             (self.y_origin & 0x00FF) as u8,
             ((self.y_origin & 0xFF00) >> 8) as u8]);
@@ -133,7 +146,15 @@ impl TGAImage {
             pixel_byte_data.push((rgba & 0x000000FF) as u8);
         }
 
-        data.append(&mut pixel_byte_data);
+        let mut test: Vec<u8> = self.image_data.iter()
+            .flat_map(|rgba| {vec![
+                    ((rgba & 0x0000FF00) >> 8) as u8,
+                    ((rgba & 0x00FF0000) >> 16) as u8,
+                    ((rgba & 0xFF000000) >> 24) as u8,
+                    (rgba & 0x000000FF) as u8]})
+            .collect();
+
+        data.append(&mut test);
         data.extend_from_slice(&self.extension_area_offset);
         data.extend_from_slice(&self.developer_dictionary_offset);
         data.extend_from_slice(&self.signature);
@@ -160,6 +181,7 @@ impl TGAColor {
     }
 
     // Pack the pixel values into a u32 value and return it.
+    // We are packing them in the form RGBA
     pub fn get_pixel_value(&self) -> u32 {
         ((self.r as u32) << 24) | ((self.g as u32) << 16) | ((self.b as u32) << 8) | self.a as u32
     }
