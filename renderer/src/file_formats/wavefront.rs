@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs;
 use std::str::FromStr;
 
-pub struct WaveFront {
+pub struct WaveFrontFile {
     vertices: Vec<Vertex>,
     faces: Vec<Face>,
 }
@@ -17,8 +17,8 @@ pub struct Face {
     pub vertices: Vec<usize>
 }
 
-impl WaveFront {
-    pub fn new(filename: &str) -> Result<WaveFront, Box<dyn Error>> {
+impl WaveFrontFile {
+    pub fn new(filename: &str) -> Result<WaveFrontFile, Box<dyn Error>> {
         let contents = fs::read_to_string(filename)?;
 
         let mut vertices: Vec<Vertex> = Vec::new();
@@ -56,8 +56,8 @@ impl WaveFront {
             
             faces.push(face);
         }
-        println!("Hih");
-        Ok(WaveFront { vertices , faces })
+
+        Ok(WaveFrontFile { vertices , faces })
     }
 
     pub fn vertex_count(&self) -> usize {

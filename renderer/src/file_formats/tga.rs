@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::prelude::*;
+use crate::drawing;
 
 pub struct TGAImage {
     // HEADER
@@ -13,7 +14,6 @@ pub struct TGAImage {
     image_height: u16, // Field 5: Height
     image_bits_per_pixel: u8, // Field 5: Also referred to as pixel depth
     image_descriptor: u8, // Field 5: Presence of an alpha channel + Screen destination of first pixel
-    image_id: u8, // Field 6: Optional as per field 1.
     
     // DATA 
     image_data: Vec<u32>, // Field 8: Image data!
@@ -40,7 +40,6 @@ impl TGAImage {
         let image_height = height + 1;
         let image_bits_per_pixel = bytes_per_pixel * 8;
         let image_descriptor = 0b0000_1000; // Bits 0-3: Alpha channel, Bits 5-6: order of moving pixels to screen
-        let image_id = 0; // Just fullfulling all righteousness. This field will not be even written to file.
         // The number of bits in `usize` is the number of bits that it takes to reference any
         // location in memory. Since vectors are locations in memory, it's size could technically
         // be the whole of memory, so I guess it makes sense that you would need a `usize` to
@@ -62,7 +61,6 @@ impl TGAImage {
             image_height,
             image_bits_per_pixel,
             image_descriptor,
-            image_id,
             image_data,
             extension_area_offset,
             developer_dictionary_offset,
@@ -71,7 +69,7 @@ impl TGAImage {
     }
 
     // x and y are u16 because they can't be bigger than the width and height
-    pub fn set (&mut self, x: u16, y: u16, color: &TGAColor) {
+    pub fn set (&mut self, x: u16, y: u16, color: &drawing::Color32) {
         if  x > self.image_width {
             panic!("Could not set pixel for invalid value or x: {}. Width is {}", x, self.image_width);
         }
@@ -168,21 +166,5 @@ impl TGAImage {
         if let Err(e) = file.write_all(&data) {
             panic!("Could not write data to file! {}", e);
         }
-    }
-}
-
-// Pixel Color
-pub struct TGAColor { r: u8, g: u8, b: u8, a: u8 }
-
-impl TGAColor {
-    pub fn new (r: u8, g: u8, b: u8, a: u8) -> TGAColor
-    {
-        TGAColor { r, g, b, a }
-    }
-
-    // Pack the pixel values into a u32 value and return it.
-    // We are packing them in the form RGBA
-    pub fn get_pixel_value(&self) -> u32 {
-        ((self.r as u32) << 24) | ((self.g as u32) << 16) | ((self.b as u32) << 8) | self.a as u32
     }
 }
