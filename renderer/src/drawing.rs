@@ -46,8 +46,8 @@ impl Line {
         if dx.abs() >= dy.abs() {
             while if x0 < x1 { x < x1 } else { x > x1 } {
                 // Set the pixel.
-                img.set(x as u16, y as u16, &color);
-                // Set x to the next pixel.
+                img.set(x as u16, y as u16, &color).unwrap();
+                // Set x to the next pixel
                 if x0 < x1 { x += 1; } else { x -= 1; }
                 // Increment the error by the slope
                 error += m.abs();
@@ -62,11 +62,11 @@ impl Line {
             }
             
             // See explanation below.
-            img.set(x1, y1, &color);
+            img.set(x1, y1, &color).unwrap();
         }
         else {
             while if y0 < y1 { (y as u16) < y1 } else { y as u16 > y1 } {
-                img.set(x as u16, y as u16, &color);
+                img.set(x as u16, y as u16, &color).unwrap();
                 
                 if y0 < y1 { y += 1; } else { y -= 1; }
 
@@ -84,7 +84,7 @@ impl Line {
             // Reason: Consider the situation where y0 is 0. If we looped until y <= y0. y would be 0,
             // yet we would stilll try to loop and eventually hit an error when we try to decrement
             // from an unsinged integer.
-            img.set(x1, y1, &color);
+            img.set(x1, y1, &color).unwrap();
         }
     }
 }

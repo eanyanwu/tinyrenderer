@@ -34,10 +34,8 @@ impl TGAImage {
         let color_map_spec = [0, 0, 0, 0, 0]; 
         let x_origin = 0;
         let y_origin = 0;
-        // When specifying a width of 100, we actually mean that x-values 0 through 100 should be
-        // valid, so we actually want 101 values. Same for the height.
-        let image_width = width + 1;
-        let image_height = height + 1;
+        let image_width = width;
+        let image_height = height;
         let image_bits_per_pixel = bytes_per_pixel * 8;
         let image_descriptor = 0b0000_1000; // Bits 0-3: Alpha channel, Bits 5-6: order of moving pixels to screen
         // The number of bits in `usize` is the number of bits that it takes to reference any
@@ -68,27 +66,42 @@ impl TGAImage {
         }
     }
 
+    pub fn get_width(&self) -> u16 {
+        self.image_width
+    }
+
+    pub fn get_height(&self) -> u16 {
+        self.image_height
+    }
+
     // x and y are u16 because they can't be bigger than the width and height
-    pub fn set (&mut self, x: u16, y: u16, color: &drawing::Color32) {
-        if  x > self.image_width {
-            panic!("Could not set pixel for invalid value or x: {}. Width is {}", x, self.image_width);
+    pub fn set (&mut self, x: u16, y: u16, color: &drawing::Color32) -> Result<(), String> {
+        if x == 0 {
+            return Err(format!("Invalid x value 0. Please use values 1-{}", self.image_width))
         }
+
+        if y == 0 {
+            return Err(format!("Invalid y value 0. Please use values 1-{}", self.image_height))
+        }
+
+        if  x > self.image_width {
+            return Err(format!("Invalid x value {}. It is greater than the width of the image.", x))
+        }
+        
         if  y > self.image_height { 
-            panic!("Could not set pixel for invalid value of y: {}. Height is {}", y, self.image_height);
+            return Err(format!("Invalid y value {}. It is greater than the height of the image.", y))
         }
     
         // 2d coordinates to 1D  index.
         // Again this convertion is needed because we can only index with usize. 
         // Consider the case where the multiplication of these three values yields a valid index
         // number, but one too large to fit in u16.
-        let index = y as usize * self.image_width as usize + x as usize;
+        let index = (y - 1) as usize * self.image_width as usize + (x - 1) as usize;
     
         // However it is safe because u16 < usize (for modern computers as far as i know)
         self.image_data[index] = color.get_pixel_value();
-    }
 
-    pub fn flip_vertically (&mut self) {
-        println!("FLIPPING");
+        Ok(())
     }
 
     // The specification says that TGA files are stored in little-endian format (Intel byte
@@ -131,20 +144,7 @@ impl TGAImage {
         data.push(self.image_bits_per_pixel);
         data.push(self.image_descriptor);
         
-        let mut pixel_byte_data = Vec::new();
-        
-        // Note that pixel value is considered a concrete "value" so it is invered i.e BGR instead
-        // of RGB.
-        // However, the Alpha channel still stays at the end. So we are actually writing the pixel 
-        // in the format BGRA .__. (yea annoying i know)
-        for rgba in &self.image_data { // See [0]
-            pixel_byte_data.push(((rgba & 0x0000FF00) >> 8) as u8);
-            pixel_byte_data.push(((rgba & 0x00FF0000) >> 16) as u8);
-            pixel_byte_data.push(((rgba & 0xFF000000) >> 24) as u8);
-            pixel_byte_data.push((rgba & 0x000000FF) as u8);
-        }
-
-        let mut test: Vec<u8> = self.image_data.iter()
+        let mut pixel_data: Vec<u8> = self.image_data.iter()
             .flat_map(|rgba| {vec![
                     ((rgba & 0x0000FF00) >> 8) as u8,
                     ((rgba & 0x00FF0000) >> 16) as u8,
@@ -152,7 +152,7 @@ impl TGAImage {
                     (rgba & 0x000000FF) as u8]})
             .collect();
 
-        data.append(&mut test);
+        data.append(&mut pixel_data);
         data.extend_from_slice(&self.extension_area_offset);
         data.extend_from_slice(&self.developer_dictionary_offset);
         data.extend_from_slice(&self.signature);
