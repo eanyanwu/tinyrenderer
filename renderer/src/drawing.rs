@@ -30,8 +30,6 @@ impl Line {
 
         let mut error = 0.0;
         
-        // x-axis is "driving" so to speak -- meaning its values on the line between the two points 
-        // is increasing faster than the y values (or at an equal rate)
         // If the x values are increasing at a greater rate than the y-values, then:
         // As x increases, by 1 pixel, the real value of y increases by the slope of the line, m. 
         // However, we can only set pixels at integer intervals. So we won't always be able to set the
@@ -44,7 +42,7 @@ impl Line {
         // This will also work if the y values are increasing at a greater rate than the x-values.
         // Except we will be adding 1/slope at each iteration.
         if dx.abs() >= dy.abs() {
-            while if x0 < x1 { x < x1 } else { x > x1 } {
+            while x != x1 {
                 // Set the pixel.
                 img.set(x as u16, y as u16, &color).unwrap();
                 // Set x to the next pixel
@@ -65,7 +63,7 @@ impl Line {
             img.set(x1, y1, &color).unwrap();
         }
         else {
-            while if y0 < y1 { (y as u16) < y1 } else { y as u16 > y1 } {
+            while y != y1 {
                 img.set(x as u16, y as u16, &color).unwrap();
                 
                 if y0 < y1 { y += 1; } else { y -= 1; }
@@ -80,7 +78,7 @@ impl Line {
                     error -= 1.0;
                 }
             }
-            // Since the loop stops right before the endpoints, we draw the endpoints manually.
+            // Since the loop stops right before drawing the endpoints, we draw the endpoints manually.
             // Reason: Consider the situation where y0 is 0. If we looped until y <= y0. y would be 0,
             // yet we would stilll try to loop and eventually hit an error when we try to decrement
             // from an unsinged integer.

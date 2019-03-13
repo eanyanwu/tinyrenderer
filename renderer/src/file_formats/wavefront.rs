@@ -1,6 +1,7 @@
-use std::error::Error;
 use std::fs;
 use std::str::FromStr;
+use std::string::ToString;
+use regex::Regex;
 
 pub struct WaveFrontFile {
     vertices: Vec<Vertex>,
@@ -14,47 +15,63 @@ pub struct Vertex {
 }
 
 pub struct Face {
-    pub vertices: Vec<usize>
+    pub vertices: [usize; 3] 
 }
 
 impl WaveFrontFile {
-    pub fn new(filename: &str) -> Result<WaveFrontFile, Box<dyn Error>> {
-        let contents = fs::read_to_string(filename)?;
+    pub fn new(filename: &str) -> Result<WaveFrontFile, String> {
+        let contents = match fs::read_to_string(filename) {
+            Ok(c) => c,
+            Err(e) => e.to_string()
+        };
 
         let mut vertices: Vec<Vertex> = Vec::new();
+
         let mut faces: Vec<Face> = Vec::new();
-
-        let vertex_matches: Vec<&str> = contents.lines()
-            .filter(|line| line.contains("v "))
-            .collect();
-
-        let face_matches: Vec<&str> = contents.lines()
-            .filter(|line| line.contains("f "))
-            .collect();
         
-        for &vertex_entry in vertex_matches.iter() {
-            let parts: Vec<&str> = vertex_entry.split(' ').collect();
+        let vertex_regex = Regex::new(r"(?x)
+                                      v                 # The literal letter v
+                                      \s                # Whitespace
+                                      (?P<x>[0-9-\.e]+) # A floating point number - x
+                                      \s                # Whitespace
+                                      (?P<y>[0-9-\.e]+) # A floating point number - y
+                                      \s                # Whitespace
+                                      (?P<z>[0-9-\.e]+) # A floating point number -z
+                                      ").unwrap();
 
-            let x = f64::from_str(parts[1]).unwrap();
-            let y = f64::from_str(parts[2]).unwrap();
-            
-            vertices.push(Vertex { x, y, z: 0.0 });
-        }
+        let face_regex = Regex::new(r"(?x)
+                                    f                               # The literal letter f
+                                    \s                              # Whitespace
+                                    (?P<v0>[0-9]*)/[0-9]*/[0-9]*    # <number>/<number>/<number
+                                    \s                              # Whitespace
+                                    (?P<v1>[0-9]*)/[0-9]*/[0-9]*    # <number>/<number>/<number>
+                                    \s                              # Whitespace
+                                    (?P<v2>[0-9]*)/[0-9]*/[0-9]*    # <number>/<number>/<number>
+                                    ").unwrap();
+        
+        for line in contents.lines() {
+            if line.starts_with("v ") {
+                let captures = vertex_regex.captures(line).unwrap();
 
-        for &face_entry in face_matches.iter() {
-            let parts: Vec<&str> = face_entry.split(' ').collect();
-            
-            let first_part: Vec<&str> = parts[1].split('/').collect();
-            let second_part: Vec<&str> = parts[2].split('/').collect();
-            let third_part: Vec<&str> = parts[3].split('/').collect();
+                vertices.push(Vertex {
+                    x: f64::from_str(&captures["x"]).unwrap(),
+                    y: f64::from_str(&captures["y"]).unwrap(),
+                    z: f64::from_str(&captures["z"]).unwrap()
+                });
 
-            let index_v0 = usize::from_str(first_part[0]).unwrap();
-            let index_v1 = usize::from_str(second_part[0]).unwrap();
-            let index_v2 = usize::from_str(third_part[0]).unwrap();
-
-            let face = Face { vertices: vec![index_v0 - 1 , index_v1 - 1, index_v2 - 1] };
-            
-            faces.push(face);
+            } else if line.starts_with("f ") {
+                let captures = face_regex.captures(line).unwrap();
+                
+                // The indicies saved in the file are 1-indexed instead of 0 indexed. 
+                // So we substract 1 from each one.
+                faces.push(Face { vertices: [
+                    usize::from_str(&captures["v0"]).unwrap() - 1, 
+                    usize::from_str(&captures["v1"]).unwrap() - 1,
+                    usize::from_str(&captures["v2"]).unwrap() - 1]
+                });
+            } else {
+                //println!("Have not yet implemented parsing {}", line);
+            }
         }
 
         Ok(WaveFrontFile { vertices , faces })
