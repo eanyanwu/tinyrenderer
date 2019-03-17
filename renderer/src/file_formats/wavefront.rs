@@ -14,6 +14,22 @@ pub struct Vertex {
     pub z: f64 
 }
 
+impl Vertex {
+    pub fn from(other: &Vertex) -> Vertex {
+        Vertex {
+            x: other.x,
+            y: other.y,
+            z: other.z
+        }
+    }
+
+    pub fn set_from(&mut self, other: &Vertex) {
+        self.x = other.x;
+        self.y = other.y;
+        self.z = other.z;
+    }
+}
+
 pub struct Face {
     pub vertices: [usize; 3] 
 }
