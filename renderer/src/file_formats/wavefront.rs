@@ -2,32 +2,12 @@ use std::fs;
 use std::str::FromStr;
 use std::string::ToString;
 use regex::Regex;
+use crate::point;
+
 
 pub struct WaveFrontFile {
-    vertices: Vec<Vertex>,
+    vertices: Vec<point::Point3D>,
     faces: Vec<Face>,
-}
-
-pub struct Vertex {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64 
-}
-
-impl Vertex {
-    pub fn from(other: &Vertex) -> Vertex {
-        Vertex {
-            x: other.x,
-            y: other.y,
-            z: other.z
-        }
-    }
-
-    pub fn set_from(&mut self, other: &Vertex) {
-        self.x = other.x;
-        self.y = other.y;
-        self.z = other.z;
-    }
 }
 
 pub struct Face {
@@ -41,7 +21,7 @@ impl WaveFrontFile {
             Err(e) => e.to_string()
         };
 
-        let mut vertices: Vec<Vertex> = Vec::new();
+        let mut vertices: Vec<point::Point3D> = Vec::new();
 
         let mut faces: Vec<Face> = Vec::new();
         
@@ -69,7 +49,7 @@ impl WaveFrontFile {
             if line.starts_with("v ") {
                 let captures = vertex_regex.captures(line).unwrap();
 
-                vertices.push(Vertex {
+                vertices.push(point::Point3D {
                     x: f64::from_str(&captures["x"]).unwrap(),
                     y: f64::from_str(&captures["y"]).unwrap(),
                     z: f64::from_str(&captures["z"]).unwrap()
@@ -101,8 +81,8 @@ impl WaveFrontFile {
         self.faces.len()
     }
 
-    pub fn get_vertex(&self, idx: usize) -> &Vertex {
-        &self.vertices[idx]
+    pub fn get_vertex(&self, idx: usize) -> point::Point3D {
+        self.vertices[idx]
     }
 
     pub fn get_face(&self, idx: usize) -> &Face {

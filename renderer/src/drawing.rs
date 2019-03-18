@@ -1,5 +1,6 @@
 use crate::file_formats::wavefront;
 use crate::file_formats::tga;
+use crate::point;
 
 // 32 Bit Color
 pub struct Color32 { r: u8, g: u8, b: u8, a: u8 }
@@ -94,61 +95,103 @@ pub fn line(
 }
 
 pub fn line_from_vertices(
-    v0: &wavefront::Vertex,
-    v1: &wavefront::Vertex,
+    v0: point::Point3D,
+    v1: point::Point3D,
     image: &mut crate::file_formats::tga::TGAImage,
     color: &Color32)
 {
     line(v0.x as u16, v0.y as u16, v1.x as u16, v1.y as u16, image, color);
 }
 
-pub fn triangle(v0: &wavefront::Vertex, v1: &wavefront::Vertex, v2: &wavefront::Vertex, image: &mut tga::TGAImage, color: &Color32) {
-      
-    let mut min_y = 1000000;
-    let mut max_y = 0;
-    let mut min_x = 1000000;
-    let mut max_x = 0;
+pub fn triangle(v0: point::Point3D, v1: point::Point3D, v2: point::Point3D, image: &mut tga::TGAImage, color: &Color32) {
+    
+    // First outline the triangle
+    line_from_vertices(v0, v1, image, &color);
+    line_from_vertices(v1, v2, image, &color);
+    line_from_vertices(v2, v0, image, &color);
 
-    if (v0.y as u64) < min_y { min_y = v0.y as u64; }
-    if (v1.y as u64) < min_y { min_y = v1.y as u64; }
-    if (v2.y as u64) < min_y { min_y = v2.y as u64; }
+    // Then figure out how to color it in :p
+    // Step 1: Figure out the "bounding box" of the triangle.
+    // I am lazy and don't feel like doing this in a scholarly 
+    // way, so here we are.
+    let mut min_y = 1000000.0;
+    let mut max_y = 0.0;
+    let mut min_x = 1000000.0;
+    let mut max_x = 0.0;
     
-    if (v0.x as u64) < min_x { min_x = v0.x as u64; }
-    if (v1.x as u64) < min_x { min_x = v1.x as u64; }
-    if (v2.x as u64) < min_x { min_x = v2.x as u64; }
+    // Yes, I know this is horrid to look at
+    // but bear with me.
+    if v0.y < min_y { min_y = v0.y; }
+    if v1.y < min_y { min_y = v1.y; }
+    if v2.y < min_y { min_y = v2.y; }
+    
+    if v0.x < min_x { min_x = v0.x; }
+    if v1.x < min_x { min_x = v1.x; }
+    if v2.x < min_x { min_x = v2.x; }
 
-    if (v0.y as u64) > max_y { max_y = v0.y as u64; }
-    if (v1.y as u64) > max_y { max_y = v1.y as u64; }
-    if (v2.y as u64) > max_y { max_y = v2.y as u64; }
+    if v0.y > max_y { max_y = v0.y; }
+    if v1.y > max_y { max_y = v1.y; }
+    if v2.y > max_y { max_y = v2.y; }
     
-    if (v0.x as u64) > max_x { max_x = v0.x as u64; }
-    if (v1.x as u64) > max_x { max_x = v1.x as u64; }
-    if (v2.x as u64) > max_x { max_x = v2.x as u64; }
-    
-    if min_x  == max_x || min_y == max_y {
+    // Almost there...
+    if v0.x > max_x { max_x = v0.x; }
+    if v1.x > max_x { max_x = v1.x; }
+    if v2.x > max_x { max_x = v2.x; }
+
+    // Get rid of any degenerate triangles...
+    if (min_x - max_x).abs() < 1.0 || (min_y - max_y).abs() < 1.0 {
         return;
     }
+    
 
-    let ab = (v1.x as i64 - v0.x as i64, v1.y as i64 - v0.y as i64, v1.z as i64 - v0.z as i64);
-    let ac = (v2.x as i64 - v0.x as i64, v2.y as i64 - v0.y as i64, v2.z as i64 - v0.z as i64);
-    let (ab_x, ab_y, ab_z) = ab;
-    let (ac_x, ac_y, ac_z) = ac;
-    let determinant = ab_x * ac_y - ac_x * ab_y;
-    let inverse_determinant = 1.0 / determinant as f64;
+    // Ok sweet, we have found the bounding box.
+    // Step 2: Determin if a given point P is inside the triangle.
+    // This is my take in barycentric coordinates since I don't 
+    // don't get barycentric coordinates 100%
+    //
+    // Given a triangle ABC, any point P, can be reached via a vector
+    // that is a linear combination of AB and AC.
+    // Meaning for any point P, we will have AP = uAB + vAC.
+    // where u and v are some constants.
+    // This is nice and all, but how does it help me?
+    // Well turns out that if the constants u and v are positive and 
+    // their sum is less than 1, then the point P will be in the triangle
+    // "enclosed" by vectors AB and AC. Draw it out to see why this is at least
+    // intuitive. I don't claim to have proved this, it just sounds right
+    //
+    // In sum, to figure out if a point P is in the triangle ABC, we need to find
+    // the constants u and v. If they are positive and sum up to less than 1, the point
+    // is inside the triangle.
+    // 
+    // To find the constants u and v, we perform some linear algebra magic.
+    // TODO: TO BE CONTINUED 
+    let ab = v1 - v0;
+    let ac = v2 - v0;
 
-    let matrix_inverse = [(ac_y as f64 * inverse_determinant, ab_y as f64 * -1.0 * inverse_determinant),
-                            (ac_x as f64 * -1.0 * inverse_determinant, ab_x as f64 * inverse_determinant)];
+    let inverse_determinant = 1.0 / (ab.x * ac.y - ac.x * ab.y);
 
-    for p_x in min_x..=max_x {
-        for p_y in min_y..=max_y {
-            let (ap_x, ap_y) = (p_x as i64 - v0.x as i64, p_y as i64 - v0.y as i64);
+    let matrix_inverse = [(ac.y * inverse_determinant, ab.y * -1.0 * inverse_determinant),
+                            (ac.x * -1.0 * inverse_determinant, ab.x * inverse_determinant)];
 
-            let u = ap_x as f64 * matrix_inverse[0].0 + ap_y as f64 * matrix_inverse[1].0;
-            let v = ap_x as f64 * matrix_inverse[0].1 + ap_y as f64 * matrix_inverse[1].1;
+    let mut p_x = min_x;
+     
+    while p_x < max_x {
+        let mut p_y = min_y;
 
-            if u > 0.0 && v > 0.0 && u + v < 1.0 {
+        while p_y < max_y {
+            let (ap_x, ap_y) = (p_x - v0.x, p_y - v0.y);
+
+            let u = ap_x * matrix_inverse[0].0 + ap_y * matrix_inverse[1].0;
+
+            let v = ap_x * matrix_inverse[0].1 + ap_y * matrix_inverse[1].1;
+
+            if u >= 0.0 && v >= 0.0 && u + v <= 1.0 {
                 image.set(p_x as u16, p_y as u16, &color).unwrap();
             }
+
+            p_y += 1.0;
         }
+
+        p_x += 1.0;
     }
 }
