@@ -144,8 +144,8 @@ pub fn triangle(v0: point::Point3D, v1: point::Point3D, v2: point::Point3D, imag
     }
     
 
-    // Ok sweet, we have found the bounding box.
-    // Step 2: Determin if a given point P is inside the triangle.
+    // Ok sweet, I have found the bounding box.
+    // Step 2: Determine if a given point P is inside the triangle.
     // This is my take in barycentric coordinates since I don't 
     // don't get barycentric coordinates 100%
     //
@@ -159,12 +159,41 @@ pub fn triangle(v0: point::Point3D, v1: point::Point3D, v2: point::Point3D, imag
     // "enclosed" by vectors AB and AC. Draw it out to see why this is at least
     // intuitive. I don't claim to have proved this, it just sounds right
     //
-    // In sum, to figure out if a point P is in the triangle ABC, we need to find
+    // In sum, to figure out if a point P is in the triangle ABC, I need to find
     // the constants u and v. If they are positive and sum up to less than 1, the point
     // is inside the triangle.
     // 
-    // To find the constants u and v, we perform some linear algebra magic.
-    // TODO: TO BE CONTINUED 
+    // To find the constants u and v, I think in the following manner.
+    // I consider the vectors AB and AC to be transformed versions of the basis vectors
+    // i and j (the 1-unit vectors in the x and y direction respectively).
+    // The matrix that defines this transformation is:
+    // |AB_x AB_x| "Let's call this matrix A"
+    // |AB_y AC_y|
+    // 
+    // If that doesn't make sense, take a look at the first 3~4 episodes of 3blue1brown's
+    // "Essense of Linear Algebra" playlist. It shed a whole new light on linear algebra
+    // for me.
+    //
+    // So i could ask myself the question:
+    // What is the vector t that when that transformation is applied, gives me the vector AP?
+    // (Deciding what question to ask is often the hardest thing. It took me one week of 
+    // looking at triangles and drawing vectors to come up with this. This is partly due to the
+    // fact that I'm practically a newbie at linear algebra)
+    // 
+    // The equation that asks that question is: Matrix A * t = Vector AP.
+    // To find vector t, we can find the inverse of the Matrix A, Matrix A^-1 and "multiply"
+    // it by Vector AP, which is exactly what I am doing below.
+    // Now, since the linear transformation that Matrix A defines takes the i and j vectors and 
+    // transforms them into AB and AC, that same linear transformation takes the t vector and 
+    // transforms it to AP. Well, we just found t. What comes next is another totally unproven
+    // assumption that i made. It just seemed right.
+    // If t_x and t_y are greater than 0 and their sum is less than 1, then the vector t is within
+    // the triangle formed by the i and j vectors.
+    // Additionally, If the point at the tip of vector t is within the triangle formed by the i and j vectors,
+    // THEN the transformed version of t, AP, must be also within the triangle formed by the
+    // transformed versions of the i and j vectors, AB and AC.
+    // 
+    // BOOM. DONE. EZE OUT.
     let ab = v1 - v0;
     let ac = v2 - v0;
 
