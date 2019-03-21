@@ -76,19 +76,19 @@ impl TGAImage {
 
     // x and y are u16 because they can't be bigger than the width and height
     pub fn set (&mut self, x: u16, y: u16, color: &drawing::Color32) -> Result<(), String> {
-        if x == 0 {
-            return Err(format!("Invalid x value 0. Please use values 1-{}", self.image_width))
-        }
+        //if x == 0 {
+        //    return Err(format!("Invalid x value 0. Please use values 1-{}", self.image_width))
+        //}
 
-        if y == 0 {
-            return Err(format!("Invalid y value 0. Please use values 1-{}", self.image_height))
-        }
+        //if y == 0 {
+        //    return Err(format!("Invalid y value 0. Please use values 1-{}", self.image_height))
+        //}
 
-        if  x > self.image_width {
+        if  x >= self.image_width {
             return Err(format!("Invalid x value {}. It is greater than the width of the image.", x))
         }
         
-        if  y > self.image_height { 
+        if  y >= self.image_height { 
             return Err(format!("Invalid y value {}. It is greater than the height of the image.", y))
         }
     
@@ -96,7 +96,7 @@ impl TGAImage {
         // Again this convertion is needed because we can only index with usize. 
         // Consider the case where the multiplication of these three values yields a valid index
         // number, but one too large to fit in u16.
-        let index = (y - 1) as usize * self.image_width as usize + (x - 1) as usize;
+        let index = y as usize * self.image_width as usize + x as usize;
     
         // However it is safe because u16 < usize (for modern computers as far as i know)
         self.image_data[index] = color.get_pixel_value();

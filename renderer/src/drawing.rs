@@ -103,21 +103,24 @@ pub fn line_from_vertices(
     line(v0.x as u16, v0.y as u16, v1.x as u16, v1.y as u16, image, color);
 }
 
-pub fn triangle(v0: point::Point3D, v1: point::Point3D, v2: point::Point3D, image: &mut tga::TGAImage, color: &Color32) {
+pub fn triangle(
+    v0: point::Point3D,
+    v1: point::Point3D, 
+    v2: point::Point3D, 
+    image: &mut tga::TGAImage, 
+    zbuffer: &mut Vec<f64>, 
+    color: &Color32) 
+{
     
-    // First outline the triangle
-    line_from_vertices(v0, v1, image, &color);
-    line_from_vertices(v1, v2, image, &color);
-    line_from_vertices(v2, v0, image, &color);
 
     // Then figure out how to color it in :p
     // Step 1: Figure out the "bounding box" of the triangle.
     // I am lazy and don't feel like doing this in a scholarly 
     // way, so here we are.
-    let mut min_y = 1000000.0;
-    let mut max_y = 0.0;
-    let mut min_x = 1000000.0;
-    let mut max_x = 0.0;
+    let mut min_y = std::f64::MAX; 
+    let mut max_y = std::f64::MIN; 
+    let mut min_x = std::f64::MAX; 
+    let mut max_x = std::f64::MIN; 
     
     // Yes, I know this is horrid to look at
     // but bear with me.
@@ -138,9 +141,12 @@ pub fn triangle(v0: point::Point3D, v1: point::Point3D, v2: point::Point3D, imag
     if v1.x > max_x { max_x = v1.x; }
     if v2.x > max_x { max_x = v2.x; }
 
-    // Get rid of any degenerate triangles...
+    // Flag any degenerate triangles...
     if (min_x - max_x).abs() < 1.0 || (min_y - max_y).abs() < 1.0 {
-        return;
+                    line_from_vertices(v0, v1, image, &Color32::new(255, 0, 0, 255));
+                    line_from_vertices(v1, v2, image, &Color32::new(255, 0, 0, 255));
+                    line_from_vertices(v2, v0, image, &Color32::new(255, 0, 0, 255));
+                    return;
     }
     
 
@@ -204,18 +210,27 @@ pub fn triangle(v0: point::Point3D, v1: point::Point3D, v2: point::Point3D, imag
 
     let mut p_x = min_x;
      
-    while p_x < max_x {
+    while p_x <= max_x + 1.0 {
         let mut p_y = min_y;
 
-        while p_y < max_y {
+        while p_y <= max_y + 1.0 {
             let (ap_x, ap_y) = (p_x - v0.x, p_y - v0.y);
 
             let u = ap_x * matrix_inverse[0].0 + ap_y * matrix_inverse[1].0;
 
             let v = ap_x * matrix_inverse[0].1 + ap_y * matrix_inverse[1].1;
 
+            let w = 1.0 - (u + v);
+
+            let interpolated_z_value = u * v0.z + v * v1.z + w * v2.z;
+            
+            let index = p_y as usize * image.get_width() as usize + p_x as usize;           
+
             if u >= 0.0 && v >= 0.0 && u + v <= 1.0 {
-                image.set(p_x as u16, p_y as u16, &color).unwrap();
+                if zbuffer[index] < interpolated_z_value {
+                    zbuffer[index] = interpolated_z_value;
+                    image.set(p_x as u16, p_y as u16, &color).unwrap();
+                }
             }
 
             p_y += 1.0;
