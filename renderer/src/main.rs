@@ -1,3 +1,4 @@
+use std::fs;
 use renderer::file_formats::tga;
 use renderer::file_formats::wavefront;
 use renderer::drawing;
@@ -5,7 +6,10 @@ use renderer::point;
 use renderer::vector;
 
 fn main() {
-    face();
+    let bytes = fs::read("obj/head_diffuse.tga").unwrap();
+
+    tga::TGAImage::from_file(&bytes);
+    //face();
     //triangles();
 }
 

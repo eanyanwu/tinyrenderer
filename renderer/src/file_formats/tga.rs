@@ -66,6 +66,96 @@ impl TGAImage {
         }
     }
 
+    pub fn from_file(image_data: &Vec<u8>) {
+        let id_length = image_data[0];
+
+        println!("Id Length: {}", id_length);
+
+        if id_length != 0 {
+            panic!("Id lengths other than 0 are not supported!");
+        }
+
+        let color_map_type = image_data[1];
+
+        println!("Color Map Type: {}", color_map_type);
+        
+        if color_map_type != 0 {
+            panic!("TGA Images with color maps are not supported! Color map: {}", color_map_type);
+        }
+
+        let image_type = image_data[2];
+        
+        println!("Image Type: {}", image_type);
+
+        if !(image_type == 2 || image_type == 10) {
+            panic!("Image Type: {}. Only Uncompressed and Compressed Truecolor images are supported", image_type);
+        }
+        
+        // Take the 5 bytes that represent the color map specification.
+        let color_map_spec = &image_data[3..8];
+        // Verify that they are all zero. 
+        if let false = color_map_spec.iter().all(|&x| x == 0) {
+            panic!("Color map is not supported. Please set all color map spec bytes to zero");
+        }
+
+        // Don't forget TGA files are saved in little endian format, so
+        // the bytes are reversed in multi-byte values
+        let x_origin = (image_data[9] as u16) << 8 | image_data[8] as u16;
+
+        println!("X Origin: {}", x_origin);
+
+        let y_origin = (image_data[11] as u16) << 8 | image_data[10] as u16;
+
+        println!("Y Origin: {}", y_origin);
+
+        let image_width = (image_data[13] as u16) << 8 | image_data[12] as u16;
+
+        println!("Image Width: {}", image_width);
+
+        let image_height: u16 = (image_data[15] as u16) << 8 | image_data[14] as u16;
+
+        println!("Image Height: {}", image_height);
+
+        let pixel_depth = image_data[16];
+
+        println!("Pixel Depth: {}", pixel_depth);
+
+        let image_descriptor = image_data[17];
+
+        println!("Image Descriptor: {}", image_descriptor);
+
+        // Extract image data
+        let pixelCount = image_width as u32 * image_height as u32;
+        
+        let mut pixel_values: Vec<u32> = Vec::new();
+        
+        // Run length encoded image
+        if image_type == 10 {
+            let counter = 0;
+            let index = 18;
+            while counter < pixelCount {
+               let rle_repetition_count = image_data[index];
+                
+               // Raw Packet
+               if (rle_repetition_count & 0b1000_0000) == 0 {
+                   println!("Raw packet");
+               }
+               // Run lenght Packet
+               else {
+                   println!("Run Length Packet");
+                   // The run count recorded is one less than the actua number of repeated pixels.
+                   // A run count of 0, actually means there is one pixel in the next field
+                   let run_count = (rle_repetition_count & 0b0111_1111) + 1;
+
+                   // TODO: Extract the pixel value field.
+               }
+            }
+        }
+        // Uncompressed image
+        else {
+        }
+    }
+
     pub fn get_width(&self) -> u16 {
         self.image_width
     }
@@ -120,7 +210,7 @@ impl TGAImage {
         // bytes in reverse order as per the TGA specification
         // [1] Use the AND bitwise operator to select the right-most byte in this 2-byte value and
         // shove it into a 1-byte value
-        // [2] Use the and bitwise operator to select the left-mose byte in this 2-byte value,
+        // [2] Use the and bitwise operator to select the left-most byte in this 2-byte value,
         // shift it to the right and shove it into a 1-byte value.
         // The shift is so that the u16 -> u8 conversion works properly
         // If after the bitwise operation we got: 1111_0001 0000_0000, the value we want 
