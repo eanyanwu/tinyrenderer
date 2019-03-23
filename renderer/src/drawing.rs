@@ -16,6 +16,15 @@ impl Color32 {
     pub fn get_pixel_value(&self) -> u32 {
         ((self.r as u32) << 24) | ((self.g as u32) << 16) | ((self.b as u32) << 8) | self.a as u32
     }
+
+    pub fn from_pixel_value(value: u32) -> Color32 {
+        let r = ((value & 0b11111111_00000000_00000000_00000000) >> 24) as u8;
+        let g = ((value & 0b00000000_11111111_00000000_00000000) >> 16) as u8;
+        let b = ((value & 0b00000000_00000000_11111111_00000000) >> 8) as u8;
+        let a = (value & 0b00000000_00000000_00000000_11111111) as u8;
+
+        Color32 { r, g, b, a }
+    }
 }
 
 pub fn line(
@@ -107,8 +116,12 @@ pub fn triangle(
     v0: point::Point3D,
     v1: point::Point3D, 
     v2: point::Point3D, 
+    t0: point::Point2D,
+    t1: point::Point2D,
+    t2: point::Point2D,
     image: &mut tga::TGAImage, 
     zbuffer: &mut Vec<f64>, 
+    texture: &mut tga::TGAImage,
     color: &Color32) 
 {
     
@@ -226,10 +239,37 @@ pub fn triangle(
             
             let index = p_y as usize * image.get_width() as usize + p_x as usize;           
 
+            let texture_width = texture.get_width() as f64;
+
+            let texture_height = texture.get_height() as f64;
+            
+            let texture_v0_x = t0.x * texture_width;
+            let texture_v0_y = t0.y * texture_height;
+            let texture_v0 = texture.get(texture_v0_x as u16, texture_v0_y as u16);
+
+            let texture_v1_x = t1.x * texture_width;
+            let texture_v1_y = t1.y * texture_height;
+            let texture_v1 = texture.get(texture_v1_x as u16, texture_v1_y as u16);
+            
+            let texture_v2_x = t2.x * texture_width;
+            let texture_v2_y = t2.y * texture_height;
+            let texture_v2 = texture.get(texture_v2_x as u16, texture_v2_y as u16);
+
+
             if u >= 0.0 && v >= 0.0 && u + v <= 1.0 {
                 if zbuffer[index] < interpolated_z_value {
                     zbuffer[index] = interpolated_z_value;
-                    image.set(p_x as u16, p_y as u16, &color).unwrap();
+
+                    let interpolated_texture_x = (w * t0.x + u * t1.x + v * t2.x);
+                    let interpolated_texture_y = (w * t0.y + u * t1.y + v * t2.y);
+
+                    let value_x = interpolated_texture_x * texture_width;
+                    let value_y = interpolated_texture_y * texture_height;
+
+                    println!("X {}, Y {}", interpolated_texture_x, interpolated_texture_y);
+                    let mut interpolated_color = texture.get(value_x as u16, value_y as u16);
+
+                    image.set(p_x as u16, p_y as u16, &interpolated_color).unwrap();
                 }
             }
 

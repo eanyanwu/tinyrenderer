@@ -8,10 +8,12 @@ use crate::point;
 pub struct WaveFrontFile {
     vertices: Vec<point::Point3D>,
     faces: Vec<Face>,
+    textures: Vec<point::Point2D>
 }
 
 pub struct Face {
-    pub vertices: [usize; 3] 
+    pub vertices: [usize; 3],
+    pub textures: [usize; 3]
 }
 
 impl WaveFrontFile {
@@ -24,6 +26,8 @@ impl WaveFrontFile {
         let mut vertices: Vec<point::Point3D> = Vec::new();
 
         let mut faces: Vec<Face> = Vec::new();
+
+        let mut textures: Vec<point::Point2D> = Vec::new();
         
         let vertex_regex = Regex::new(r"(?x)
                                       v                 # The literal letter v
@@ -35,14 +39,22 @@ impl WaveFrontFile {
                                       (?P<z>[0-9-\.e]+) # A floating point number -z
                                       ").unwrap();
 
+        let texture_regex = Regex::new(r"(?x)
+                                      vt                # The literal letter vt
+                                      \s\s              # 2 Whitespace
+                                      (?P<u>[0-9-\.e]+) # W floating point number - u
+                                      \s                # Whitespace
+                                      (?P<v>[0-9-\.e]+) # A floating poin tnumber - v
+                                      ").unwrap();
+
         let face_regex = Regex::new(r"(?x)
-                                    f                               # The literal letter f
-                                    \s                              # Whitespace
-                                    (?P<v0>[0-9]*)/[0-9]*/[0-9]*    # <number>/<number>/<number
-                                    \s                              # Whitespace
-                                    (?P<v1>[0-9]*)/[0-9]*/[0-9]*    # <number>/<number>/<number>
-                                    \s                              # Whitespace
-                                    (?P<v2>[0-9]*)/[0-9]*/[0-9]*    # <number>/<number>/<number>
+                                    f                                       # The literal letter f
+                                    \s                                      # Whitespace
+                                    (?P<v0>[0-9]*)/(?P<t0>[0-9]*)/[0-9]*    # <number>/<number>/<number
+                                    \s                                      # Whitespace
+                                    (?P<v1>[0-9]*)/(?P<t1>[0-9]*)/[0-9]*    # <number>/<number>/<number>
+                                    \s                                      # Whitespace
+                                    (?P<v2>[0-9]*)/(?P<t2>[0-9]*)/[0-9]*    # <number>/<number>/<number>
                                     ").unwrap();
         
         for line in contents.lines() {
@@ -60,17 +72,30 @@ impl WaveFrontFile {
                 
                 // The indicies saved in the file are 1-indexed instead of 0 indexed. 
                 // So we substract 1 from each one.
-                faces.push(Face { vertices: [
-                    usize::from_str(&captures["v0"]).unwrap() - 1, 
-                    usize::from_str(&captures["v1"]).unwrap() - 1,
-                    usize::from_str(&captures["v2"]).unwrap() - 1]
+                faces.push(Face { 
+                    vertices: [
+                        usize::from_str(&captures["v0"]).unwrap() - 1, 
+                        usize::from_str(&captures["v1"]).unwrap() - 1,
+                        usize::from_str(&captures["v2"]).unwrap() - 1],
+                    textures: [
+                        usize::from_str(&captures["t0"]).unwrap() - 1,
+                        usize::from_str(&captures["t1"]).unwrap() - 1,
+                        usize::from_str(&captures["t2"]).unwrap() - 1]
+                });
+            } else if line.starts_with("vt ") {
+                println!("Line: {}", line);
+                let captures = texture_regex.captures(line).unwrap();
+
+                textures.push(point::Point2D {
+                    x: f64::from_str(&captures["u"]).unwrap(),
+                    y: f64::from_str(&captures["v"]).unwrap()
                 });
             } else {
                 //println!("Have not yet implemented parsing {}", line);
             }
         }
 
-        Ok(WaveFrontFile { vertices , faces })
+        Ok(WaveFrontFile { vertices , faces, textures })
     }
 
     pub fn vertex_count(&self) -> usize {
@@ -87,5 +112,9 @@ impl WaveFrontFile {
 
     pub fn get_face(&self, idx: usize) -> &Face {
         &self.faces[idx]
+    }
+
+    pub fn get_texture(&self, idx: usize) -> point::Point2D {
+        self.textures[idx]
     }
 }

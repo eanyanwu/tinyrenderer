@@ -66,7 +66,7 @@ impl TGAImage {
         }
     }
 
-    pub fn from_file(image_data: &Vec<u8>) {
+    pub fn from_file(image_data: &Vec<u8>) -> TGAImage {
         let id_length = image_data[0];
 
         println!("Id Length: {}", id_length);
@@ -131,28 +131,100 @@ impl TGAImage {
         
         // Run length encoded image
         if image_type == 10 {
-            let counter = 0;
-            let index = 18;
+            let mut counter = 0;
+            let mut index = 18;
             while counter < pixelCount {
                let rle_repetition_count = image_data[index];
+               let run_count = (rle_repetition_count & 0b0111_1111) + 1;
+               println!("Counter: {}", counter);
+               println!("Image Data Length: {}", pixelCount); 
+               index += 1;
                 
                // Raw Packet
                if (rle_repetition_count & 0b1000_0000) == 0 {
                    println!("Raw packet");
+
+                   for i in 0..run_count {
+                       let b = image_data[index];
+                       index += 1;
+                       let g = image_data[index];
+                       index += 1;
+                       let r = image_data[index];
+                       index += 1;
+                       let mut a = 255;
+
+                       if pixel_depth == 32 {
+                           a = image_data[index];
+                           index +=1;
+                       }
+
+                       let color = drawing::Color32::new(r, g, b, a);
+
+                       let pixel_value = color.get_pixel_value();
+
+                       println!("\tPixel value: {}", pixel_value);
+
+                       pixel_values.push(pixel_value);
+
+                       counter += 1;
+                   }
                }
                // Run lenght Packet
                else {
-                   println!("Run Length Packet");
-                   // The run count recorded is one less than the actua number of repeated pixels.
-                   // A run count of 0, actually means there is one pixel in the next field
-                   let run_count = (rle_repetition_count & 0b0111_1111) + 1;
+                   println!("\tRun Length Packet");
 
-                   // TODO: Extract the pixel value field.
+                   println!("\tRun length: {}", run_count);
+                   
+                   let b = image_data[index];
+                   index += 1;
+                   let g = image_data[index];
+                   index += 1;
+                   let r = image_data[index];
+                   index += 1;
+                   let mut a = 255;
+
+                   if pixel_depth == 32 {
+                       a = image_data[index];
+                       index +=1;
+                   }
+
+                   let color = drawing::Color32::new(r, g, b, a);
+
+                   let pixel_value = color.get_pixel_value();
+
+                   println!("\tPixel value: {}", pixel_value);
+
+                   for i in 0..run_count {
+                       counter += 1;
+                       pixel_values.push(pixel_value);
+                   }
                }
             }
         }
         // Uncompressed image
         else {
+        }
+
+        let extension_area_offset = [0, 0, 0, 0];
+        let developer_dictionary_offset = [0, 0, 0, 0];
+        let signature: [u8; 18] = [b'T', b'R', b'U', b'E', b'V', b'I', b'S', b'I', b'O', b'N', b'-', b'X', b'F', b'I', b'L', b'E', b'.', b'\0'];
+        
+        // Create the struct and return it.
+        TGAImage { 
+            id_length,
+            color_map_type,
+            image_type: 2,
+            color_map_spec: [0, 0, 0, 0, 0],
+            x_origin,
+            y_origin,
+            image_width,
+            image_height,
+            image_bits_per_pixel: 32,
+            image_descriptor,
+            image_data: pixel_values,
+            extension_area_offset,
+            developer_dictionary_offset,
+            signature
         }
     }
 
@@ -163,7 +235,14 @@ impl TGAImage {
     pub fn get_height(&self) -> u16 {
         self.image_height
     }
+    
+    pub fn get(&self, x: u16, y: u16) -> drawing::Color32 {
+       let index = y as usize * self.image_width as usize + x as usize;
 
+       let pixel_value = self.image_data[index];
+
+       drawing::Color32::from_pixel_value(pixel_value)
+    }
     // x and y are u16 because they can't be bigger than the width and height
     pub fn set (&mut self, x: u16, y: u16, color: &drawing::Color32) -> Result<(), String> {
         //if x == 0 {
