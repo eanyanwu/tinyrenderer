@@ -1,6 +1,8 @@
-use std::fs::File;
 use std::io::prelude::*;
+use std::fs::File;
+
 use crate::drawing;
+use crate::color;
 
 pub struct TGAImage {
     // HEADER
@@ -158,7 +160,7 @@ impl TGAImage {
                            index +=1;
                        }
 
-                       let color = drawing::Color32::new(r, g, b, a);
+                       let color = color::Color32::new(r, g, b, a);
 
                        let pixel_value = color.get_pixel_value();
 
@@ -188,7 +190,7 @@ impl TGAImage {
                        index +=1;
                    }
 
-                   let color = drawing::Color32::new(r, g, b, a);
+                   let color = color::Color32::new(r, g, b, a);
 
                    let pixel_value = color.get_pixel_value();
 
@@ -236,15 +238,15 @@ impl TGAImage {
         self.image_height
     }
     
-    pub fn get(&self, x: u16, y: u16) -> drawing::Color32 {
+    pub fn get(&self, x: u16, y: u16) -> color::Color32 {
        let index = y as usize * self.image_width as usize + x as usize;
 
        let pixel_value = self.image_data[index];
 
-       drawing::Color32::from_pixel_value(pixel_value)
+       color::Color32::from_pixel_value(pixel_value)
     }
     // x and y are u16 because they can't be bigger than the width and height
-    pub fn set (&mut self, x: u16, y: u16, color: &drawing::Color32) -> Result<(), String> {
+    pub fn set (&mut self, x: u16, y: u16, color: &color::Color32) -> Result<(), String> {
         //if x == 0 {
         //    return Err(format!("Invalid x value 0. Please use values 1-{}", self.image_width))
         //}

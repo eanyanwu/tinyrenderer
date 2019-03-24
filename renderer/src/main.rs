@@ -1,7 +1,8 @@
 use std::fs;
-use renderer::file_formats::tga;
-use renderer::file_formats::wavefront;
+use renderer::tga;
+use renderer::wavefront;
 use renderer::drawing;
+use renderer::color;
 use renderer::point;
 use renderer::vector;
 
@@ -16,10 +17,8 @@ pub fn face() {
     let bytes = fs::read("obj/head_diffuse.tga").unwrap();
     let mut texture = tga::TGAImage::from_file(&bytes);
 
-    let white = drawing::Color32::new(255, 255, 255, 255);
-    
-    let width: u16 = 2400;
-    let height: u16 = 2400;
+    let width: u16 = 800;
+    let height: u16 = 800;
 
     let mut zbuffer = vec![std::f64::MIN; width as usize * height as usize];
 
@@ -48,7 +47,7 @@ pub fn face() {
         let intensity = normalized_cross_product.z * 1.0;
 
         if intensity > 0.0 {
-            drawing::triangle(r0, r1, r2, t0, t1, t2, &mut image, &mut zbuffer, &mut texture, &drawing::Color32::new((intensity*255.0) as u8, (intensity*255.0) as u8, (intensity*255.0) as u8, 255));
+            drawing::triangle(r0, r1, r2, t0, t1, t2, &mut image, &mut zbuffer, &mut texture, &color::Color32::new((intensity*255.0) as u8, (intensity*255.0) as u8, (intensity*255.0) as u8, 255));
         }
     }
 

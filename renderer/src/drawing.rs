@@ -1,39 +1,16 @@
-use crate::file_formats::wavefront;
-use crate::file_formats::tga;
+use crate::wavefront;
+use crate::tga;
 use crate::point;
+use crate::color;
 
-// 32 Bit Color
-pub struct Color32 { r: u8, g: u8, b: u8, a: u8 }
-
-impl Color32 {
-    pub fn new (r: u8, g: u8, b: u8, a: u8) -> Color32
-    {
-        Color32 { r, g, b, a }
-    }
-
-    // Pack the pixel values into a u32 value and return it.
-    // We are packing them in the form RGBA
-    pub fn get_pixel_value(&self) -> u32 {
-        ((self.r as u32) << 24) | ((self.g as u32) << 16) | ((self.b as u32) << 8) | self.a as u32
-    }
-
-    pub fn from_pixel_value(value: u32) -> Color32 {
-        let r = ((value & 0b11111111_00000000_00000000_00000000) >> 24) as u8;
-        let g = ((value & 0b00000000_11111111_00000000_00000000) >> 16) as u8;
-        let b = ((value & 0b00000000_00000000_11111111_00000000) >> 8) as u8;
-        let a = (value & 0b00000000_00000000_00000000_11111111) as u8;
-
-        Color32 { r, g, b, a }
-    }
-}
 
 pub fn line(
     x0: u16,
     y0: u16,
     x1: u16,
     y1: u16, 
-    img: &mut crate::file_formats::tga::TGAImage,
-    color: &Color32) 
+    img: &mut tga::TGAImage,
+    color: &color::Color32) 
 {
     // Start by getting the first pixel to plot
     let mut x = x0;
@@ -106,8 +83,8 @@ pub fn line(
 pub fn line_from_vertices(
     v0: point::Point3D,
     v1: point::Point3D,
-    image: &mut crate::file_formats::tga::TGAImage,
-    color: &Color32)
+    image: &mut tga::TGAImage,
+    color: &color::Color32)
 {
     line(v0.x as u16, v0.y as u16, v1.x as u16, v1.y as u16, image, color);
 }
@@ -122,7 +99,7 @@ pub fn triangle(
     image: &mut tga::TGAImage, 
     zbuffer: &mut Vec<f64>, 
     texture: &mut tga::TGAImage,
-    color: &Color32) 
+    color: &color::Color32) 
 {
     
 
@@ -156,9 +133,9 @@ pub fn triangle(
 
     // Flag any degenerate triangles...
     if (min_x - max_x).abs() < 1.0 || (min_y - max_y).abs() < 1.0 {
-                    line_from_vertices(v0, v1, image, &Color32::new(255, 0, 0, 255));
-                    line_from_vertices(v1, v2, image, &Color32::new(255, 0, 0, 255));
-                    line_from_vertices(v2, v0, image, &Color32::new(255, 0, 0, 255));
+                    line_from_vertices(v0, v1, image, &color::Color32::new(255, 0, 0, 255));
+                    line_from_vertices(v1, v2, image, &color::Color32::new(255, 0, 0, 255));
+                    line_from_vertices(v2, v0, image, &color::Color32::new(255, 0, 0, 255));
                     return;
     }
     
