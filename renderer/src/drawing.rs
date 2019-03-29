@@ -243,7 +243,6 @@ pub fn triangle(
                     let value_x = interpolated_texture_x * texture_width;
                     let value_y = interpolated_texture_y * texture_height;
 
-                    println!("X {}, Y {}", interpolated_texture_x, interpolated_texture_y);
                     let mut interpolated_color = texture.get(value_x as u16, value_y as u16);
 
                     image.set(p_x as u16, p_y as u16, &interpolated_color).unwrap();

@@ -15,7 +15,7 @@ pub fn face() {
     let model = wavefront::WaveFrontFile::new("obj/head.obj").unwrap();
     
     let bytes = fs::read("obj/head_diffuse.tga").unwrap();
-    let mut texture = tga::TGAImage::from_file(&bytes);
+    let mut texture = tga::TGAImage::from_file(bytes);
 
     let width: u16 = 800;
     let height: u16 = 800;
