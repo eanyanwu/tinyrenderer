@@ -190,9 +190,23 @@ impl<'a> TGAFileParser<'a> {
         }
     }
 
-    fn parse(&self) -> Result<TGAFile, TGAFileParserError> {
-        //let tga_file = TGAFile::new(0,0);
-        unimplemented!()
+    fn parse(&mut self) -> Result<TGAFile, TGAFileParsingError> {
+        let tga_file = TGAFile::new(0,0);
+
+        self.inner.accept(&[0]).map_err(TGAFileParsingError::from("Id lengths other than 0 are not supported"))?;
+
+        self.inner.accept(&[0]).map_err(TGAFileParsingError::from("TGA Images with color maps are not supported"))?;
+
+        let image_type;
+
+        match self.inner.try_accept(&[2]) || self.inner.try_accept(&[10]) {
+            true =>  image_type = self.inner.read(1).unwrap(),
+            false => return Err(TGAFileParsingError::new("Only True-color images are supported")),
+        };
+
+        self.inner.accept(&[0,0,0,0,0]).map_err(TGAFileParsingError::from("Color map is not supported. Please set all color map scecification bytes to zero"))?;
+
+        Ok(tga_file)
     }
 }
 
@@ -377,7 +391,25 @@ fn extract_rle_pixels(
     extracted_pixels
 }
 
-pub enum TGAFileParserError {
-    UnsupportedIDLength,
-    UnsupportedColorMap
+pub struct TGAFileParsingError {
+    inner: Option<bytereader::ByteReaderError>,
+    msg: String,
+}
+
+impl TGAFileParsingError {
+    pub fn new(msg: &str) -> Self {
+        TGAFileParsingError {
+            msg: msg.to_string(),
+            inner: None,
+        }
+    }
+
+    pub fn from(msg: &str) -> impl FnOnce(bytereader::ByteReaderError) -> Self + '_ {
+        move | err | {
+            TGAFileParsingError {
+                msg: msg.to_string(),
+                inner: Some(err),
+            }
+        }
+    }
 }
