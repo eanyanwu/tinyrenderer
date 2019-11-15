@@ -1,14 +1,16 @@
+mod tga;
+mod wavefront;
+mod drawing;
+mod color;
+mod point;
+mod vector;
+mod bytereader;
+
 use std::fs;
-use renderer::tga;
-use renderer::wavefront;
-use renderer::drawing;
-use renderer::color;
-use renderer::point;
-use renderer::vector;
 
 fn main() {
 
-    let img = tga::TGAImage::new(50, 50);
+    let img = tga::TGAFile::new(50, 50);
     img.write_tga_file("test.tga");
 }
 
@@ -16,14 +18,14 @@ pub fn face() {
     let model = wavefront::WaveFrontFile::new("obj/head.obj").unwrap();
     
     let bytes = fs::read("obj/head_diffuse.tga").unwrap();
-    let mut texture = tga::TGAImage::from_bytes(bytes);
+    let mut texture = tga::TGAFile::from_bytes(bytes);
 
     let width: u16 = 800;
     let height: u16 = 800;
 
     let mut zbuffer = vec![std::f64::MIN; width as usize * height as usize];
 
-    let mut image = tga::TGAImage::new(width, height);
+    let mut image = tga::TGAFile::new(width, height);
 
     for i in 0..model.face_count() {
         let face = model.get_face(i);

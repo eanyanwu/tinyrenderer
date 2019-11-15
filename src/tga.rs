@@ -2,10 +2,11 @@ use std::io::prelude::*;
 use std::fs::File;
 
 use crate::color;
+use crate::bytereader;
 
 // Tga image specification: http://www.dca.fee.unicamp.br/~martino/disciplinas/ea978/tgaffs.pdf
 
-pub struct TGAImage {
+pub struct TGAFile {
     // HEADER
     id_length: u8, // Field 1: Optional. Identifies the number of bytes contained in field 6. Value of 0 means no field 6
     color_map_type: u8, // Field 2: Value of 0: "No color map included". Value of 1: "Color map included"
@@ -27,8 +28,12 @@ pub struct TGAImage {
     signature: [u8; 18]
 }
 
-impl TGAImage {
-    pub fn new (width: u16, height: u16) -> TGAImage {
+struct TGAFileParser<'a> {
+    inner: bytereader::ByteReader<'a>
+}
+
+impl TGAFile {
+    pub fn new (width: u16, height: u16) -> TGAFile {
         let id_length = 0; 
         let color_map_type = 0; 
         let image_type = 2; 
@@ -49,7 +54,7 @@ impl TGAImage {
         let signature: [u8; 18] = [b'T', b'R', b'U', b'E', b'V', b'I', b'S', b'I', b'O', b'N', b'-', b'X', b'F', b'I', b'L', b'E', b'.', b'\0'];
         
         // Create the struct and return it.
-        TGAImage { 
+        TGAFile { 
             id_length,
             color_map_type,
             image_type,
@@ -68,7 +73,7 @@ impl TGAImage {
     }
    
     // Create a TGAImage object from byte array 
-    pub fn from_bytes(image_data: Vec<u8>) -> TGAImage {
+    pub fn from_bytes(image_data: Vec<u8>) -> TGAFile {
         read_byte_array(image_data).unwrap()
     }
 
@@ -177,7 +182,32 @@ impl TGAImage {
     }
 }
 
-fn read_byte_array(byte_array: Vec<u8>) -> Result<TGAImage, String> {
+impl<'a> TGAFileParser<'a> {
+    fn new(bytes: &'a[u8]) -> TGAFileParser<'a> {
+        TGAFileParser {
+            inner: bytereader::ByteReader::new(bytes)
+        }
+    }
+
+    fn parse(&self) -> Result<TGAFile, &'static str> {
+        let tga_file = TGAFile::new(0, 0);
+
+        self.inner.accept(&[0]).unwrap_or(Err("Id lengths other than 0 are not supported"))?;
+
+        if !self.inner.accept(&[0]) {
+            Err(&format!("TGA Images with color maps are not supported. Color Map Type: {}", color_map_type))
+        }
+
+        if self.inner.accept(&[2]) {}
+        else if self.inner.accept(&[10]) {}
+        else {
+            Err(&format!("Only Compressed and Uncompressed TrueColor images are supposrted. Image Type: {}", image_type))
+        }
+        Ok(tga_file)
+    }
+}
+
+fn read_byte_array(byte_array: Vec<u8>) -> Result<TGAFile, String> {
     let id_length = byte_array[0];
 
     if id_length != 0 {
@@ -242,7 +272,7 @@ fn read_byte_array(byte_array: Vec<u8>) -> Result<TGAImage, String> {
             pixel_depth);
     }
 
-    Ok(TGAImage {
+    Ok(TGAFile {
         id_length,
         color_map_type,
         image_type,
