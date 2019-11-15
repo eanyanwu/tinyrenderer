@@ -1,3 +1,4 @@
+use std::error;
 use std::io::prelude::*;
 use std::fs::File;
 
@@ -189,21 +190,9 @@ impl<'a> TGAFileParser<'a> {
         }
     }
 
-    fn parse(&self) -> Result<TGAFile, &'static str> {
-        let tga_file = TGAFile::new(0, 0);
-
-        self.inner.accept(&[0]).unwrap_or(Err("Id lengths other than 0 are not supported"))?;
-
-        if !self.inner.accept(&[0]) {
-            Err(&format!("TGA Images with color maps are not supported. Color Map Type: {}", color_map_type))
-        }
-
-        if self.inner.accept(&[2]) {}
-        else if self.inner.accept(&[10]) {}
-        else {
-            Err(&format!("Only Compressed and Uncompressed TrueColor images are supposrted. Image Type: {}", image_type))
-        }
-        Ok(tga_file)
+    fn parse(&self) -> Result<TGAFile, TGAFileParserError> {
+        //let tga_file = TGAFile::new(0,0);
+        unimplemented!()
     }
 }
 
@@ -386,4 +375,9 @@ fn extract_rle_pixels(
     }
 
     extracted_pixels
+}
+
+pub enum TGAFileParserError {
+    UnsupportedIDLength,
+    UnsupportedColorMap
 }

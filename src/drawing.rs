@@ -9,7 +9,7 @@ pub fn line(
     y0: u16,
     x1: u16,
     y1: u16, 
-    img: &mut tga::TGAImage,
+    img: &mut tga::TGAFile,
     color: &color::Color32) 
 {
     // Start by getting the first pixel to plot
@@ -83,7 +83,7 @@ pub fn line(
 pub fn line_from_vertices(
     v0: point::Point3D,
     v1: point::Point3D,
-    image: &mut tga::TGAImage,
+    image: &mut tga::TGAFile,
     color: &color::Color32)
 {
     line(v0.x as u16, v0.y as u16, v1.x as u16, v1.y as u16, image, color);
@@ -96,9 +96,9 @@ pub fn triangle(
     t0: point::Point2D,
     t1: point::Point2D,
     t2: point::Point2D,
-    image: &mut tga::TGAImage, 
+    image: &mut tga::TGAFile, 
     zbuffer: &mut Vec<f64>, 
-    texture: &mut tga::TGAImage,
+    texture: &mut tga::TGAFile,
     color: &color::Color32) 
 {
     

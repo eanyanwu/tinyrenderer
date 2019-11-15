@@ -1,3 +1,6 @@
+use std::error;
+use std::fmt;
+
 pub struct ByteReader<'a> {
     inner: &'a[u8],
     offset: usize,
@@ -15,7 +18,7 @@ impl<'a> ByteReader<'a> {
     pub fn read(&mut self, count: usize) -> Result<&'a[u8], ByteReaderError> {
         let bytes = self.peek(count)?;
         
-        self.offset += count;
+        self.seek(self.offset + count);
 
         Ok(bytes)
     }
@@ -27,7 +30,7 @@ impl<'a> ByteReader<'a> {
 
         match self.inner.get(self.offset..end) {
             Some(x) => Ok(x),
-            None => Err(ByteReaderError::OutOfBounds)
+            None => Err(ByteReaderError::OutOfBounds(OutOfBoundsError::new(self.inner.len(), end)))
         }
     }
 
@@ -35,7 +38,7 @@ impl<'a> ByteReader<'a> {
     /// If the new offset exceeds the array bounds, an `OutOfBounds` error will be returned
     pub fn seek(&mut self, offset: usize) -> Result<(), ByteReaderError> {
         if offset >= self.inner.len() {
-            Err(ByteReaderError::OutOfBounds)
+            Err(ByteReaderError::OutOfBounds(OutOfBoundsError::new(self.inner.len(), offset)))
         }
         else{
             self.offset = offset;
@@ -72,8 +75,7 @@ impl<'a> ByteReader<'a> {
             Ok(())
         }
         else {
-            Err(ByteReaderError::UnexpectedByte(
-                &format!("expected {:?}, found {:?}", expected, bytes)))
+            Err(ByteReaderError::UnexpectedValue(UnexpectedValueError::new(expected, bytes)))
         }
     }
 
@@ -83,24 +85,80 @@ impl<'a> ByteReader<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum ByteReaderError {
-    OutOfBounds,
-    UnexpectedByte(&'static str),
+    OutOfBounds(OutOfBoundsError),
+    UnexpectedValue(UnexpectedValueError),
 }
+
+#[derive(Debug)]
+pub struct OutOfBoundsError { bounds: usize, offset: usize }
+#[derive(Debug)]
+pub struct UnexpectedValueError { expected: Vec<u8>, actual: Vec<u8> }
+
+impl OutOfBoundsError {
+    pub fn new(bounds: usize, offset: usize) -> Self {
+        OutOfBoundsError { bounds, offset }
+    }
+}
+
+impl UnexpectedValueError {
+    pub fn new(expected: &[u8], actual: &[u8]) -> Self {
+        UnexpectedValueError {
+            expected: expected.to_vec(),
+            actual: actual.to_vec(),
+        }
+    }
+}
+
+impl fmt::Display for ByteReaderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ByteReaderError::OutOfBounds(x) => write!(f, "OutOfBounds: index {} is out of bounds {}", x.offset, x.bounds),
+            ByteReaderError::UnexpectedValue(x) => write!(f, "UnexpectedValue: expected {:?}, got {:?}", x.expected, x.actual),
+        }
+    }
+}
+
+impl error::Error for ByteReaderError {}
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::bytereader::{ByteReaderError, ByteReader};
+    use crate::bytereader::{
+        ByteReaderError,
+        OutOfBoundsError,
+        ByteReader};
 
     #[test]
-    fn test_read_empty_slice() {
+    fn test_read_empty_slice() -> Result<(), ()> {
         let mut reader = ByteReader::new(&[]);
         
         let res = reader.read(1);
 
         assert!(res.is_err());
-        assert!(res.unwrap_err() == ByteReaderError::OutOfBounds);
+
+        match res.err() {
+            Some(ByteReaderError::OutOfBounds(_)) => Ok(()),
+            _ => Err(())
+        }
+    }
+
+    #[test]
+    fn test_read_out_of_bounds_with_correct_error() -> Result<(), ()> {
+        let mut reader = ByteReader::new(&[1,2,3]);
+
+        let res = reader.read(4);
+
+        assert!(res.is_err());
+        
+        if let ByteReaderError::OutOfBounds(OutOfBoundsError { bounds: x, offset: y }) = res.err().unwrap() {
+            assert!(x == 3);
+            assert!(y == 4);
+            Ok(())
+        }
+        else {
+            Err(())
+        }
     }
 
     #[test]
