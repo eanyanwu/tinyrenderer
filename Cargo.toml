@@ -1,6 +1,9 @@
-[workspace]
+[package]
+name = "renderer"
+version = "0.1.0"
+authors = ["Eze Anyanwu <hello@ezeanyinabia.com>"]
+edition = "2018"
 
-members = [
-    "tests",
-    "renderer"
-]
+[dependencies]
+
+regex = "1"
