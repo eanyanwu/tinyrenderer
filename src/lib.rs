@@ -4,3 +4,4 @@ pub mod vector;
 pub mod point;
 pub mod tga;
 pub mod wavefront;
+pub mod bytereader;

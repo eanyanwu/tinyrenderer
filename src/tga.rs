@@ -3,31 +3,32 @@ use std::fs::File;
 
 use crate::color;
 
+// Tga image specification: http://www.dca.fee.unicamp.br/~martino/disciplinas/ea978/tgaffs.pdf
+
 pub struct TGAImage {
     // HEADER
     id_length: u8, // Field 1: Optional. Identifies the number of bytes contained in field 6. Value of 0 means no field 6
     color_map_type: u8, // Field 2: Value of 0: "No color map included". Value of 1: "Color map included"
     image_type: u8,// // Field 3: Type of the image e.g ( compressed/uncompressed, true-color/color-mapped etc.. )
     color_map_spec: [u8; 5], // Field 4: Color map spec.
-    x_origin: u16, // Field 5: Not entirely sure what this refers to yet.
-    y_origin: u16, // Field 5: Same as above. These two values are part of the same field in the specification.
+    x_origin: u16, // Field 5 x-coordinate of the lower-left corner of our image
+    y_origin: u16, // Field 5 y-coordinate os the lower-left corner of our images
     image_width: u16, // Field 5: Width
     image_height: u16, // Field 5: Height
     image_bits_per_pixel: u8, // Field 5: Also referred to as pixel depth
     image_descriptor: u8, // Field 5: Presence of an alpha channel + Screen destination of first pixel
     
-    // DATA 
+    // DATA
     image_data: Vec<u32>, // Field 8: Image data!
 
-    // FOOTER: According to the specification, the presence of these last 26 bits helps determine
-    // that this is a TGA file of Version 2.
+    // FOOTER: 
     developer_dictionary_offset: [u8; 4], 
     extension_area_offset: [u8; 4], 
     signature: [u8; 18]
 }
 
 impl TGAImage {
-    pub fn new (width: u16, height: u16, bytes_per_pixel: u8) -> TGAImage {
+    pub fn new (width: u16, height: u16) -> TGAImage {
         let id_length = 0; 
         let color_map_type = 0; 
         let image_type = 2; 
@@ -36,7 +37,7 @@ impl TGAImage {
         let y_origin = 0;
         let image_width = width;
         let image_height = height;
-        let image_bits_per_pixel = bytes_per_pixel * 8;
+        let image_bits_per_pixel = 32;
         let image_descriptor = 0b0000_1000; // Bits 0-3: Alpha channel, Bits 5-6: order of moving pixels to screen
         // The number of bits in `usize` is the number of bits that it takes to reference any
         // location in memory. Since vectors are locations in memory, it's size could technically
@@ -67,7 +68,7 @@ impl TGAImage {
     }
    
     // Create a TGAImage object from byte array 
-    pub fn from_file(image_data: Vec<u8>) -> TGAImage {
+    pub fn from_bytes(image_data: Vec<u8>) -> TGAImage {
         read_byte_array(image_data).unwrap()
     }
 
