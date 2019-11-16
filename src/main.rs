@@ -9,7 +9,8 @@ mod bytereader;
 use std::fs;
 
 fn main() {
-    fs::read("obj/head_diffuse.tga").unwrap();
+    let bytes = fs::read("obj/head_diffuse.tga").unwrap();
+    tga::TGAFile::from_bytes(bytes).unwrap();
 }
 
 pub fn face() {

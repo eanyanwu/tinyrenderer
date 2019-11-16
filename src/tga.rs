@@ -185,51 +185,30 @@ impl TGAFile {
 }
 
 impl<'a> TGAFileParser<'a> {
-    fn parse(bytes: &'a[u8]) -> Result<TGAFile, TGAFileParsingError> {
+    pub fn parse(bytes: &'a[u8]) -> Result<TGAFile, TGAFileParsingError> {
         let mut parser = TGAFileParser {
             inner: bytereader::ByteReader::new(bytes)
         };
 
-        parser.inner.accept(&[0]).map_err(TGAFileParsingError::with("Id lengths other than 0 are not supported"))?;
+        parser.accept_byte(0,"Id lengths other than 0 are not supported")?;
 
-        parser.inner.accept(&[0]).map_err(TGAFileParsingError::with("TGA Images with color maps are not supported"))?;
+        parser.accept_byte(0,"TGA Images with color maps are not supported")?;
 
-        // The calls to `unwrap` that follow are safe.
-        // We can clearly see how many bytes we read. If that didn't fail, calling next() won't fail.
-        let image_type = parser.inner.read(1)
-                                    .map_err(TGAFileParsingError::with("Could not read the image type"))?
-                                    .iter()
-                                    .cloned()
-                                    .next()
-                                    .unwrap();
+        let image_type = parser.read_u8("Could not read the image type")?;
 
-                                    parser.inner.accept(&[0; 5]).map_err(TGAFileParsingError::with("Color map is not supported. Please set all color map scecification bytes to zero"))?;
+        parser.accept_bytes(&[0; 5], "Color map is not supported. Please set all color map scecification bytes to zero")?;
 
-        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read x-origin"))?.iter().cloned();
-        let x_origin = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+        let x_origin = parser.read_u16("Could not read x-origin")?;
 
-        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read y-origin"))?.iter().cloned();
-        let y_origin = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+        let y_origin = parser.read_u16("Could not read y-origin")?;
 
-        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read the image width"))?.iter().cloned();
-        let image_width = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+        let image_width = parser.read_u16("Could not read the image width")?;
 
-        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read the image height"))?.iter().cloned();
-        let image_height = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+        let image_height = parser.read_u16("Could not read the image height")?;
 
-        let pixel_depth = parser.inner.read(1)
-                                    .map_err(TGAFileParsingError::with("Could not read the pixel depth"))?
-                                    .iter()
-                                    .cloned()
-                                    .next()
-                                    .unwrap();
+        let pixel_depth = parser.read_u8("Could not read the pixel depth")?;
 
-        let image_descriptor = parser.inner.read(1)
-                                    .map_err(TGAFileParsingError::with("Could not read the image descriptor"))?
-                                    .iter()
-                                    .cloned()
-                                    .next()
-                                    .unwrap();
+        let image_descriptor = parser.read_u8("Could not read the image descriptor")?;
 
         // It's a simple calculus:
         // number data bytes = pixel depth * image width * image height
@@ -238,13 +217,7 @@ impl<'a> TGAFileParser<'a> {
         // (b) Though you can verify that this calculation won't overflow a u64
         // using the `usize` type seems more correct. `byte_count` cannot be greater than 
         // the maximum memory we can address (which is what usize's MAX is)
-        let byte_count = pixel_depth as usize * image_width as usize * image_height as usize;
-
-        let data = parser.inner.read(byte_count)
-                                .map_err(TGAFileParsingError::with("Could not read pixel data"))?
-                                .iter()
-                                .cloned()
-                                .collect::<Vec<u8>>();
+        let pixel_count = image_width as usize * image_height as usize;
 
         Ok(TGAFile {
             id_length: 0,
@@ -262,6 +235,27 @@ impl<'a> TGAFileParser<'a> {
             developer_dictionary_offset: [0; 4],
             signature: [0; 18] 
         })
+    }
+
+    fn accept_byte(&mut self, expected_byte: u8, error_msg: &str) -> Result<(), TGAFileParsingError> {
+        self.accept_bytes(&[expected_byte], error_msg)
+    }
+
+    fn accept_bytes(&mut self, expected_bytes: &[u8], error_msg: &str) -> Result<(), TGAFileParsingError> {
+        self.inner.accept(expected_bytes).map_err(TGAFileParsingError::with(error_msg))
+    }
+
+    fn read_u8(&mut self, error_msg: &str) -> Result<u8, TGAFileParsingError> {
+        Ok(self.inner.read(1)
+                    .map_err(TGAFileParsingError::with(error_msg))?
+                    .iter()
+                    .cloned()
+                    .next()
+                    .unwrap())
+    }
+
+    fn read_u16(&mut self, error_msg: &str) -> Result<u16, TGAFileParsingError> {
+        Ok(u16::from_le_bytes([self.read_u8(error_msg)?, self.read_u8(error_msg)?]))
     }
 }
 
