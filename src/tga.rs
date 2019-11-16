@@ -6,8 +6,8 @@ use std::fs::File;
 use crate::color;
 use crate::bytereader;
 
-// Tga image specification: http://www.dca.fee.unicamp.br/~martino/disciplinas/ea978/tgaffs.pdf
-
+/// Structure of a simple TGA file according to the specification:  
+/// http://www.dca.fee.unicamp.br/~martino/disciplinas/ea978/tgaffs.pdf
 pub struct TGAFile {
     // HEADER
     id_length: u8, // Field 1: Optional. Identifies the number of bytes contained in field 6. Value of 0 means no field 6
@@ -28,10 +28,6 @@ pub struct TGAFile {
     developer_dictionary_offset: [u8; 4], 
     extension_area_offset: [u8; 4], 
     signature: [u8; 18]
-}
-
-struct TGAFileParser<'a> {
-    inner: bytereader::ByteReader<'a>
 }
 
 impl TGAFile {
@@ -184,7 +180,15 @@ impl TGAFile {
     }
 }
 
+struct TGAFileParser<'a> {
+    inner: bytereader::ByteReader<'a>
+}
+
 impl<'a> TGAFileParser<'a> {
+    /// Parse the TGA file
+    /// Pixel data is returned as sequence of 32-bit numbers 
+    /// If the bit-depth is 24, the alpha channel is set to 255
+    /// Bit depths other than 32 and 24 are not supported
     pub fn parse(bytes: &'a[u8]) -> Result<TGAFile, TGAFileParsingError> {
         let mut parser = TGAFileParser {
             inner: bytereader::ByteReader::new(bytes)
@@ -210,14 +214,14 @@ impl<'a> TGAFileParser<'a> {
 
         let image_descriptor = parser.read_u8("Could not read the image descriptor")?;
 
-        // It's a simple calculus:
-        // number data bytes = pixel depth * image width * image height
         // I convert everything to usize for two reasons
         // (a) multiplication might cause overflow if we don't have enough bits
         // (b) Though you can verify that this calculation won't overflow a u64
         // using the `usize` type seems more correct. `byte_count` cannot be greater than 
         // the maximum memory we can address (which is what usize's MAX is)
         let pixel_count = image_width as usize * image_height as usize;
+
+        let pixel_data = parser.read_pixel_data(pixel_depth, image_type, pixel_count)?;
 
         Ok(TGAFile {
             id_length: 0,
@@ -229,7 +233,7 @@ impl<'a> TGAFileParser<'a> {
             image_width: image_width,
             image_height: image_height,
             image_bits_per_pixel: pixel_depth,
-            image_data: vec![0x000000FF; image_width as usize * image_height as usize],
+            image_data: pixel_data,
             image_descriptor: image_descriptor,
             extension_area_offset: [0; 4],
             developer_dictionary_offset: [0; 4],
@@ -257,104 +261,109 @@ impl<'a> TGAFileParser<'a> {
     fn read_u16(&mut self, error_msg: &str) -> Result<u16, TGAFileParsingError> {
         Ok(u16::from_le_bytes([self.read_u8(error_msg)?, self.read_u8(error_msg)?]))
     }
-}
 
-fn extract_uncompressed_pixels(
-    byte_array: &[u8],
-    pixel_count: u32,
-    pixel_depth: u8) -> Vec<u32> {
-
-    let mut num_processed_pixels: u32 = 0;
-
-    let mut byte_array_iter = byte_array.iter();
-
-    let mut extracted_pixels: Vec<u32> = Vec::new();
-
-    while num_processed_pixels < pixel_count {
-        let b = *(byte_array_iter.next().unwrap());
-        let g = *(byte_array_iter.next().unwrap());
-        let r = *(byte_array_iter.next().unwrap());
-
-        // My implementation always saves pixels in 32 bits.
-        // If the file we are reading is missing the alpha channel
-        // default to opaque i.e a value of 255
-        let a = if pixel_depth == 24 {
-            255
-        } else {
-            *(byte_array_iter.next().unwrap())
-        };
-
-        extracted_pixels.push(color::Color32::new(r, g, b, a).get_pixel_value());
-
-        num_processed_pixels += 1;
+    fn read_bytes(&mut self, count: usize, error_msg: &str) -> Result<&'a[u8], TGAFileParsingError> {
+        self.inner.read(count).map_err(TGAFileParsingError::with(error_msg))
     }
 
-    extracted_pixels
-}
-// Expand Run-Length Encoded pixels
-fn extract_rle_pixels(
-    byte_array: &[u8],
-    pixel_count: u32,
-    pixel_depth: u8) -> Vec<u32> {
-    
-    let mut num_processed_pixels: u32 = 0;
-
-    let mut byte_array_iter = byte_array.iter();
-
-    let mut extracted_pixels: Vec<u32> = Vec::new();
-
-    while num_processed_pixels < pixel_count {
-
-        let rle_repetition_count = byte_array_iter.next().unwrap();
-
-        let run_count = (rle_repetition_count & 0b0111_1111) + 1;
-
-        let is_rle_packet = (rle_repetition_count & 0b1000_0000) >> 7 == 1;
-
-        // Raw Packet 
-        if !is_rle_packet {
-            for _i in 0..run_count {
-                // Recall that bytes are stored in 
-                // little endian format. So the bytes for 
-                // RGB are actually stored in reverse
-                let b = *(byte_array_iter.next().unwrap());
-                let g = *(byte_array_iter.next().unwrap());
-                let r = *(byte_array_iter.next().unwrap());
-                let a = if pixel_depth == 24 {
-                    255 
-                } else {
-                    *(byte_array_iter.next().unwrap())
-                };
-
-                let pixel_value = color::Color32::new(r, g, b, a)
-                    .get_pixel_value();
-
-                extracted_pixels.push(pixel_value);
-
-                num_processed_pixels += 1;
-            }
-        } else { // Run-Length encoded packet
-            let b = *(byte_array_iter.next().unwrap());
-            let g = *(byte_array_iter.next().unwrap());
-            let r = *(byte_array_iter.next().unwrap());
-            let a = if pixel_depth == 24 {
-                255 
-            } else {
-                *(byte_array_iter.next().unwrap())
-            };
-
-            let pixel_value = color::Color32::new(r, g, b, a)
-                .get_pixel_value();
-
-            for _i in 0..run_count {
-                extracted_pixels.push(pixel_value);
-
-                num_processed_pixels += 1;
-            }
+    fn read_pixel_data(
+        &mut self, 
+        pixel_depth: u8,
+        image_type: u8,
+        pixel_count: usize) -> Result<Vec<u32>, TGAFileParsingError> 
+    {
+        if image_type == 2 {
+            self.read_uncompressed_data(pixel_depth, pixel_count)
+        }
+        else if image_type == 10 {
+            self.read_compressed_data(pixel_depth, pixel_count)
+        }
+        else {
+            Err(TGAFileParsingError::new("Only compressed and uncompressed True-color images are suppored"))
         }
     }
 
-    extracted_pixels
+    fn read_uncompressed_data(
+        &mut self, 
+        pixel_depth: u8,
+        pixel_count: usize) -> Result<Vec<u32>, TGAFileParsingError> 
+    {
+        if pixel_depth != 24 && pixel_depth != 32 {
+            Err(TGAFileParsingError::new("Only 24-bit and 32-bit pixels are supported"))
+        }
+        else {
+            Ok(self.read_bytes(pixel_count, "Could not read uncompressed pixel data")?
+            .chunks(pixel_depth as usize/ 8)
+            .map(|x| {
+                let x = x.iter().cloned().rev().collect::<Vec<u8>>();
+
+                if pixel_depth == 24 {
+                    u32::from_be_bytes([255, x[0], x[1], x[2]])
+                }
+                else {
+                    u32::from_be_bytes([x[1], x[2], x[3], x[0]])
+                }
+            })
+            .collect::<Vec<u32>>())
+        }
+    }
+
+    fn read_compressed_data(
+        &mut self,
+        pixel_depth: u8,
+        mut pixel_count: usize) -> Result<Vec<u32>, TGAFileParsingError> 
+    {
+        if pixel_depth != 24 && pixel_depth != 32 {
+            Err(TGAFileParsingError::new("Only 24-bit and 32-bit pixels are supported"))
+        }
+        else {
+            let mut pixel_data = Vec::new();
+
+            while pixel_count > 0 {
+                let rle_repetition_byte = self.read_u8("Could not read the repetition byte")?;
+                let run_count = ((rle_repetition_byte & 0b0111_1111) + 1) as usize;
+                let bytes_per_pixel = pixel_depth as usize/ 8;
+                let is_rle_packet = (rle_repetition_byte & 0b1000_0000) >> 7 == 1;
+
+                if !is_rle_packet {
+                    pixel_data.append(&mut self.read_bytes(run_count * bytes_per_pixel, "Could not read rle raw pixel data")?
+                            .chunks(bytes_per_pixel)
+                            .map(|x| {
+                                let x = x.iter().cloned().rev().collect::<Vec<u8>>();
+
+                                if pixel_depth == 24 {
+                                    u32::from_be_bytes([255, x[0], x[1], x[2]])
+                                }
+                                else {
+                                    u32::from_be_bytes([x[1], x[2], x[3], x[0]])
+                                }
+                            })
+                            .collect::<Vec<u32>>());
+                }
+                else {
+                    let msg = "Could not read rle encoded pixel";
+                    let b = self.read_u8(msg)?;
+                    let g = self.read_u8(msg)?;
+                    let r = self.read_u8(msg)?;
+                    let a;
+                    if pixel_depth == 24 {
+                        a = 255;
+                    }
+                    else {
+                        a = self.read_u8(msg)?;
+                    }
+
+                    let pixel = u32::from_be_bytes([r, g, b, a]);
+
+                    pixel_data.append(&mut vec![pixel; run_count]);
+                }
+
+                pixel_count -= run_count;
+            }
+
+            Ok(pixel_data)
+        }
+    }
 }
 
 #[derive(Debug)]
