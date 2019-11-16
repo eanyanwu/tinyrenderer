@@ -1,4 +1,5 @@
 use std::error;
+use std::fmt;
 use std::io::prelude::*;
 use std::fs::File;
 
@@ -74,8 +75,8 @@ impl TGAFile {
     }
    
     // Create a TGAImage object from byte array 
-    pub fn from_bytes(image_data: Vec<u8>) -> TGAFile {
-        read_byte_array(image_data).unwrap()
+    pub fn from_bytes(image_data: Vec<u8>) -> Result<TGAFile, TGAFileParsingError> {
+        TGAFileParser::parse(&image_data)
     }
 
     pub fn get_width(&self) -> u16 {
@@ -184,113 +185,84 @@ impl TGAFile {
 }
 
 impl<'a> TGAFileParser<'a> {
-    fn new(bytes: &'a[u8]) -> TGAFileParser<'a> {
-        TGAFileParser {
+    fn parse(bytes: &'a[u8]) -> Result<TGAFile, TGAFileParsingError> {
+        let mut parser = TGAFileParser {
             inner: bytereader::ByteReader::new(bytes)
-        }
-    }
-
-    fn parse(&mut self) -> Result<TGAFile, TGAFileParsingError> {
-        let tga_file = TGAFile::new(0,0);
-
-        self.inner.accept(&[0]).map_err(TGAFileParsingError::from("Id lengths other than 0 are not supported"))?;
-
-        self.inner.accept(&[0]).map_err(TGAFileParsingError::from("TGA Images with color maps are not supported"))?;
-
-        let image_type;
-
-        match self.inner.try_accept(&[2]) || self.inner.try_accept(&[10]) {
-            true =>  image_type = self.inner.read(1).unwrap(),
-            false => return Err(TGAFileParsingError::new("Only True-color images are supported")),
         };
 
-        self.inner.accept(&[0,0,0,0,0]).map_err(TGAFileParsingError::from("Color map is not supported. Please set all color map scecification bytes to zero"))?;
+        parser.inner.accept(&[0]).map_err(TGAFileParsingError::with("Id lengths other than 0 are not supported"))?;
 
-        Ok(tga_file)
+        parser.inner.accept(&[0]).map_err(TGAFileParsingError::with("TGA Images with color maps are not supported"))?;
+
+        // The calls to `unwrap` that follow are safe.
+        // We can clearly see how many bytes we read. If that didn't fail, calling next() won't fail.
+        let image_type = parser.inner.read(1)
+                                    .map_err(TGAFileParsingError::with("Could not read the image type"))?
+                                    .iter()
+                                    .cloned()
+                                    .next()
+                                    .unwrap();
+
+                                    parser.inner.accept(&[0; 5]).map_err(TGAFileParsingError::with("Color map is not supported. Please set all color map scecification bytes to zero"))?;
+
+        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read x-origin"))?.iter().cloned();
+        let x_origin = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+
+        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read y-origin"))?.iter().cloned();
+        let y_origin = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+
+        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read the image width"))?.iter().cloned();
+        let image_width = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+
+        let mut bytes = parser.inner.read(2).map_err(TGAFileParsingError::with("Could not read the image height"))?.iter().cloned();
+        let image_height = u16::from_le_bytes([bytes.next().unwrap(), bytes.next().unwrap()]);
+
+        let pixel_depth = parser.inner.read(1)
+                                    .map_err(TGAFileParsingError::with("Could not read the pixel depth"))?
+                                    .iter()
+                                    .cloned()
+                                    .next()
+                                    .unwrap();
+
+        let image_descriptor = parser.inner.read(1)
+                                    .map_err(TGAFileParsingError::with("Could not read the image descriptor"))?
+                                    .iter()
+                                    .cloned()
+                                    .next()
+                                    .unwrap();
+
+        // It's a simple calculus:
+        // number data bytes = pixel depth * image width * image height
+        // I convert everything to usize for two reasons
+        // (a) multiplication might cause overflow if we don't have enough bits
+        // (b) Though you can verify that this calculation won't overflow a u64
+        // using the `usize` type seems more correct. `byte_count` cannot be greater than 
+        // the maximum memory we can address (which is what usize's MAX is)
+        let byte_count = pixel_depth as usize * image_width as usize * image_height as usize;
+
+        let data = parser.inner.read(byte_count)
+                                .map_err(TGAFileParsingError::with("Could not read pixel data"))?
+                                .iter()
+                                .cloned()
+                                .collect::<Vec<u8>>();
+
+        Ok(TGAFile {
+            id_length: 0,
+            color_map_type: 0,
+            image_type: image_type,
+            color_map_spec: [0; 5],
+            x_origin: x_origin,
+            y_origin: y_origin,
+            image_width: image_width,
+            image_height: image_height,
+            image_bits_per_pixel: pixel_depth,
+            image_data: vec![0x000000FF; image_width as usize * image_height as usize],
+            image_descriptor: image_descriptor,
+            extension_area_offset: [0; 4],
+            developer_dictionary_offset: [0; 4],
+            signature: [0; 18] 
+        })
     }
-}
-
-fn read_byte_array(byte_array: Vec<u8>) -> Result<TGAFile, String> {
-    let id_length = byte_array[0];
-
-    if id_length != 0 {
-        return Err(String::from("Id lengths other than 0 are not supported"));
-    }
-
-    let color_map_type = byte_array[1];
-
-    if color_map_type != 0 {
-        return Err(format!("TGA Images with color maps are not supported. Color Map Type: {}", color_map_type));
-    }
-
-    let image_type = byte_array[2];
-    
-    if !(image_type == 2 || image_type == 10) {
-        return Err(format!("Only Compressed and Uncompressed TrueColor images are supposrted. Image Type: {}", image_type));
-    }
-    
-    let color_map_spec = &byte_array[3..8];
-    // Verify that they are all zero. 
-    if let false = color_map_spec.iter().all(|&x| x == 0) {
-        return Err(String::from("Colr map is not supported. Please set all color map scecification bytes to zero"));
-    }
-
-    // Don't forget TGA files are saved in little endian format, so
-    // the bytes are reversed in multi-byte values
-    let x_origin = (byte_array[9] as u16) << 8 | byte_array[8] as u16;
-
-    let y_origin = (byte_array[11] as u16) << 8 | byte_array[10] as u16;
-
-    let image_width = (byte_array[13] as u16) << 8 | byte_array[12] as u16;
-
-    let image_height: u16 = (byte_array[15] as u16) << 8 | byte_array[14] as u16;
-
-    let pixel_depth = byte_array[16];
-
-    let image_descriptor = byte_array[17];
-
-    let (header, rest) = byte_array.split_at(18);
-
-    println!("Header len: {}. Rest len: {}", header.len(), rest.len());
-
-    let mut pixel_data = Vec::new();
-
-    // The casting is because image_width and image_height are a u16
-    // but multiplying them could give a number as big as u32
-    let pixel_count = image_width as u32 * image_height as u32;
-
-    println!("Pixel Count: {}", pixel_count);
-
-    // Run-length encoded pixel values
-    if image_type == 10 {
-        pixel_data = extract_rle_pixels(
-            rest,
-            pixel_count,
-            pixel_depth);
-
-    } else { // Uncompressed pixel values
-        pixel_data = extract_uncompressed_pixels(
-            rest,
-            pixel_count,
-            pixel_depth);
-    }
-
-    Ok(TGAFile {
-        id_length,
-        color_map_type,
-        image_type,
-        color_map_spec: [0, 0, 0, 0, 0],
-        x_origin,
-        y_origin,
-        image_width,
-        image_height,
-        image_bits_per_pixel: pixel_depth,
-        image_descriptor,
-        image_data: pixel_data,
-        extension_area_offset: [0; 4],
-        developer_dictionary_offset: [0; 4],
-        signature: [0; 18] 
-    })
 }
 
 fn extract_uncompressed_pixels(
@@ -391,6 +363,7 @@ fn extract_rle_pixels(
     extracted_pixels
 }
 
+#[derive(Debug)]
 pub struct TGAFileParsingError {
     inner: Option<bytereader::ByteReaderError>,
     msg: String,
@@ -404,12 +377,24 @@ impl TGAFileParsingError {
         }
     }
 
-    pub fn from(msg: &str) -> impl FnOnce(bytereader::ByteReaderError) -> Self + '_ {
+    pub fn with(msg: &str) -> impl FnOnce(bytereader::ByteReaderError) -> Self + '_ {
         move | err | {
             TGAFileParsingError {
                 msg: msg.to_string(),
                 inner: Some(err),
             }
         }
+    }
+}
+
+impl error::Error for TGAFileParsingError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        Some(self.inner.as_ref().unwrap())
+    }
+}
+
+impl fmt::Display for TGAFileParsingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FileParsingError: {}.", self.msg)
     }
 }

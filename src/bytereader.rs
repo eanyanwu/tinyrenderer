@@ -18,7 +18,7 @@ impl<'a> ByteReader<'a> {
     pub fn read(&mut self, count: usize) -> Result<&'a[u8], ByteReaderError> {
         let bytes = self.peek(count)?;
         
-        self.seek(self.offset + count);
+        self.seek(self.offset + count)?;
 
         Ok(bytes)
     }

@@ -9,16 +9,14 @@ mod bytereader;
 use std::fs;
 
 fn main() {
-
-    let img = tga::TGAFile::new(50, 50);
-    img.write_tga_file("test.tga");
+    fs::read("obj/head_diffuse.tga").unwrap();
 }
 
 pub fn face() {
     let model = wavefront::WaveFrontFile::new("obj/head.obj").unwrap();
     
     let bytes = fs::read("obj/head_diffuse.tga").unwrap();
-    let mut texture = tga::TGAFile::from_bytes(bytes);
+    let mut texture = tga::TGAFile::from_bytes(bytes).unwrap();
 
     let width: u16 = 800;
     let height: u16 = 800;
